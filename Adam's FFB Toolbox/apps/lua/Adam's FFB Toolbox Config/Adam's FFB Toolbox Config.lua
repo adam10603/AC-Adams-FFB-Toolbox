@@ -1265,7 +1265,7 @@ function script.windowMain(dt)
     runtimeData.appHeartbeatClock = os.clock()
 
     if not appConfig.firstInstallPassed then
-        local message = "This seems to be your first time using this plugin.\n\nFor the best experience it is recommended to use certain values for AC's built-in FFB settings.\n\nThe recommended FFB settings are the following:\n"
+        local message = "This seems to be your first time using this plugin.\n\nFor the best experience it's recommended to use certain values for AC's built-in FFB settings.\n\nThe recommended FFB settings are:\n"
 
         for k, v in pairs(gameConfigSuggestions) do
             if gameConfigSuggestionsConsidered[k] then
@@ -1273,7 +1273,7 @@ function script.windowMain(dt)
             end
         end
 
-        message = message .. "\n\nYou can also change these any time from this app!\n\nClick this button to apply the settins mentioned above (other settings like gain won't be affected):"
+        message = message .. "\n\nYou can also change these any time from this app!\n\nClick this button to apply the settings above (others like gain won't be affected):"
 
         showDummyLine(0.5)
         ui.textWrapped(message)
