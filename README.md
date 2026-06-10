@@ -34,7 +34,7 @@ Also, this mod was NOT developed by AI unlike some other FFB apps. I'd rather no
 
 This mod requires [***Content Manager***](https://assettocorsa.club/content-manager.html) and [***Custom Shaders Patch***](https://acstuff.ru/patch/) to be installed!
 
-First, download the latest version from [***Releases***](https://github.com/adam10603/AC-Adams-FFB-Toolbox/releases) or from [***Overtake***](https://google.com/).
+First, download the latest version from [***Releases***](https://github.com/adam10603/AC-Adams-FFB-Toolbox/releases) or from [***Overtake***](https://www.overtake.gg/downloads/adams-ffb-toolbox.84691/).
 
 Once you have the zip file you can drag it into Content Manager to install it.
 
