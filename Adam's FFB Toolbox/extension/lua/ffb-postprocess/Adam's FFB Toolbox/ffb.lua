@@ -8,6 +8,7 @@ local runtimeData = ac.connect(storage.runtimeData)
 
 runtimeData.appCanRun = false
 runtimeData.autoGainLevel = -1
+runtimeData.downforceDynamicRange = -1
 
 if ac.getPatchVersionCode() < 3465 then
     return
@@ -446,6 +447,7 @@ local function onProcessingSkip(ffbValue, vehicle) -- clears any leftover state 
     oversteerFeelConditionSmoother:reset()
     lastCollisionProtectionBlend = 0.0
     runtimeData.autoGainLevel = -1
+    runtimeData.downforceDynamicRange = -1
     -- w0PrevSurfaceType = vehicle.wheels[0].surfaceExtendedType -- should be vehicle PR but its probably ok
     -- w1PrevSurfaceType = vehicle.wheels[1].surfaceExtendedType
     -- w0PrevNormal:set(0.0, 1.0, 0.0)
@@ -471,7 +473,7 @@ local function processFFB(ffbValue, dt)
     local rearPeakSlipRatio = vData.perfData:getTargetRearSlipRatio()
     local topSpeedEst = vData.perfData:getTopSpeedEstimate()
     local vRef = topSpeedEst * vRefPointNd
-    ac.debug("vRef", vRef * 3.6)
+    ac.debug("Gen | vRef", vRef * 3.6)
     local lowSpeedFade = math.smoothstep(math.lerpInvSat(vData.localHVelLen, 4.0 / 3.6, 12.0 / 3.6)) -- fades out certain effects near a standstill
     local frontWheelLoadAtRest = vData.perfData:getFrontTireLoadAtRest(vData.wheelbase, rAxlePos.z)
     local frontWheelLoadAt70PercentSpeed = vData.perfData:getFrontTireLoadAtNdSpeed(vRefPointNd, vData.wheelbase, rAxlePos.z)
@@ -480,7 +482,12 @@ local function processFFB(ffbValue, dt)
     local mzEstimateAtCurrentSpeed = vData.perfData:getMzEstimate(frontWheelLoadAtCurrentSpeed, vData.vehicle.wheels[1].tyreRadius)
     local mzRatioInFFB = vData.perfData:getMzRatioInFFB(frontWheelLoadAt70PercentSpeed, vData.vehicle.wheels[1].tyreRadius, mzEstimateAt70PercentSpeed) -- when mz peaks what portion of the ffb strength is coming from the mz
 
-    -- ac.debug("mzRatioInFFB", mzRatioInFFB, 0.0, 1.0)
+    ac.debug("Tel | front nd slip", vData.frontNdSlip, 0.0, 2.0)
+    ac.debug("Tel | rear nd slip", vData.rearNdSlip, 0.0, 2.0)
+
+    -- ac.debug("W1 surface,", vData.vehiclePR.wheels[1].surfaceExtendedType)
+
+    ac.debug("Gen | Mz ratio in FFB", mzRatioInFFB, 0.0, 1.0)
 
     -- ac.debug("est max front axle mz", mzEstimateAtCurrentSpeed)
     -- ac.debug("est max front axle mz old", vData.perfData:getMzEstimateOld(frontWheelLoadAtCurrentSpeed, vData.vehicle.wheels[1].tyreRadius))
@@ -492,9 +499,7 @@ local function processFFB(ffbValue, dt)
     -- ac.debug("f fz0", vData.perfData.frontFZ0)
     -- ac.debug("f axis dot", vData.perfData.steerBasisAxis:dot(vec3(0, 1, 0)))
 
-    ac.debug("W1 ndSlip", vData.vehiclePR.wheels[1].ndSlip, 0.0, 1.0)
-
-    ac.debug("DATA", string.format("%.1f\t%.1f\t%.1f\t%.1f\t%.0f\t%.4f\t%.4f", math.abs(vData.vehiclePR.wheels[1].fy), math.abs(vData.vehiclePR.wheels[1].mz), vData.vehiclePR.wheels[1].load, vData.perfData.frontFZ0, vData.perfData.frontTireRate, vData.perfData.steerBasisAxis:dot(vec3(0, 1, 0)), vData.vehicle.wheels[1].tyreRadius))
+    -- ac.debug("DATA", string.format("%.1f\t%.1f\t%.1f\t%.1f\t%.0f\t%.4f\t%.4f", math.abs(vData.vehiclePR.wheels[1].fy), math.abs(vData.vehiclePR.wheels[1].mz), vData.vehiclePR.wheels[1].load, vData.perfData.frontFZ0, vData.perfData.frontTireRate, vData.perfData.steerBasisAxis:dot(vec3(0, 1, 0)), vData.vehicle.wheels[1].tyreRadius))
 
     local function getFFBBaseStrength(load, mz)
         load = load or frontWheelLoadAt70PercentSpeed
@@ -510,17 +515,12 @@ local function processFFB(ffbValue, dt)
     local rAxleHVelAngle = lib.numberGuard(math.deg(math.atan2(vData.rAxleLocalVel.x, math.abs(vData.rAxleLocalVel.z)))) -- reflected at 90 degrees
     local rAxleHVelAngleRaw = lib.numberGuard(math.deg(math.atan2(vData.rAxleLocalVel.x, vData.rAxleLocalVel.z))) -- -180 to 180
 
-    ac.debug("ffbRefLevelVRef", ffbRefLevelVRef, 0.0, 1.0)
-    -- ac.debug("ffbRefLevelVRef old", vData.perfData:getFFBPeakStrengthEstimateOld(frontWheelLoadAt70PercentSpeed, vData.vehicle.wheels[1].tyreRadius, vData.vehicle.ffbBase, mzEstimateAt70PercentSpeed) * ac.getFFBGain(), 0.0, 1.0)
-    local currentEstFFB = vData.perfData:getFFBPeakStrengthEstimateCurrnet(vData.vehicle.wheels[1].tyreRadius, vData.vehicle.ffbBase) * ac.getFFBGain()
-    ac.debug("ffb ref current V peak Nd", currentEstFFB, 0.0, 1.0)
+    ac.debug("Gen | FFB est at vRef", ffbRefLevelVRef, -1.0, 1.0)
+    -- local currentEstFFB = vData.perfData:getFFBPeakStrengthEstimateCurrnet(vData.vehicle.wheels[1].tyreRadius, vData.vehicle.ffbBase) * ac.getFFBGain()
 
     local finalFFB = ffbValue
 
     -- auto gain
-
-    -- ac.debug("ffb mult", vData.vehicle.ffbMultiplier)
-    -- ac.debug("ffb mult func", ac.getFFBGain()) -- only this has a sign
 
     local function processAutoGain()
         local adjustAutoGain = getConfigValue("autoAdjustGain")
@@ -530,13 +530,9 @@ local function processFFB(ffbValue, dt)
         runtimeData.autoGainLevel = math.round(newMultiplier * 100.0)
 
         if adjustAutoGain and (now - lastGainChangeAttempt) >= (1.0 / 20.0) then
-            ac.debug("ffbMultiplier", vData.vehicle.ffbMultiplier)
-            ac.debug("newMultiplier", newMultiplier)
-            ac.debug("difference", math.abs(vData.vehicle.ffbMultiplier - newMultiplier))
             lastGainChangeAttempt = now
             if math.abs(vData.vehicle.ffbMultiplier - newMultiplier) > 0.00099 then
                 ac.broadcastSharedEvent("AFFBT_setFFBMultiplier", newMultiplier)
-                ac.log("SET GAIN")
             end
         end
     end
@@ -560,8 +556,7 @@ local function processFFB(ffbValue, dt)
         local filterHoldTime = 0.1
         local filterFadeTime = 0.1
         local absFilterMult = math.smoothstep(math.lerpInvSat(tSinceLastFrontABSPulse - filterHoldTime, filterFadeTime, 0.0))
-        ac.debug("ABS Filt | wheel 1 ABS", vData.vehiclePR.wheels[1].abs, 0.0, 1.0)
-        ac.debug("ABS Filt | absFilterMult", absFilterMult, 0.0, 1.0)
+        ac.debug("ABS Filt | current mult", absFilterMult, 0.0, 1.0)
         absFilterBlend = getExponentialDecayBlend(dt, maxFilterRT * absFilterMult)
         ffbABSFiltered = math.lerp(ffbABSFiltered, finalFFB, absFilterBlend)
         finalFFB = ffbABSFiltered
@@ -595,8 +590,12 @@ local function processFFB(ffbValue, dt)
 
     -- ac.debug("current ffb pred", vData.perfData:getFFBPeakStrengthEstimate((vData.vehiclePR.wheels[0].load + vData.vehiclePR.wheels[1].load) * 0.5, vData.vehicle.wheels[1].tyreRadius, vData.vehicle.ffbBase, (vData.vehiclePR.wheels[0].mz + vData.vehiclePR.wheels[1].mz) * math.sign(-vData.frontSlipDeg)) * math.abs(ac.getFFBGain()), 0.0, 1.0)
 
-    -- local extraSAT = getConfigValue("extraSAT") * (0.2 / (math.max(mzRatioInFFB, 0.05) - 0.02)) -- * ((1.0 / 3.0) / mzRatioInFFB)
-    local extraSAT = getConfigValue("extraSAT") * math.max(0.1, 0.5 / mzRatioInFFB - 1.0) -- * ((1.0 / 3.0) / mzRatioInFFB)
+    local extraSAT = getConfigValue("extraSAT")
+
+    if getConfigValue("extraSATSuspensionCompensation") then
+        extraSAT = extraSAT * math.max(0.1, 0.5 / mzRatioInFFB - 1.0)
+    end
+
     if extraSAT > 1e-6 then
         -- tmpVec1:set(vData.perfData.steerBasisAxis):mul(xMirrorVec)
         -- tmpVec2:set(vData.perfData.steerBasisAxis)
@@ -611,7 +610,6 @@ local function processFFB(ffbValue, dt)
 
         if getConfigValue("extraSATMakeupGain") then
             local satCompMult = 1.0 / (1.0 + mzRatioInFFB * extraSAT)
-            -- ac.debug("satCompMult", satCompMult)
             finalFFB = finalFFB * satCompMult
         end
 
@@ -636,13 +634,14 @@ local function processFFB(ffbValue, dt)
         local downforceEffect = 1.0
         if dfCompMode == 1 then
             local dfMult = getConfigValue("downforceCompPercentage")
-            -- ac.debug("dfMult", dfMult)
             if type(dfMult) == "number" then
                 downforceEffect = dfMult
             end
         elseif dfCompMode == 2 then
             downforceEffect = lib.clamp01(getConfigValue("downforceCompDynamicRange") / dfDynamicRange)
         end
+
+        runtimeData.downforceDynamicRange = math.max(0.0, dfDynamicRange)
 
         local function getCompensatedFFBMult()
             local standstillLoadFactor = (frontWheelLoadAtRest / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
@@ -653,32 +652,23 @@ local function processFFB(ffbValue, dt)
             local makeupGain = 1.0
 
             if getConfigValue("downforceCompMakeupGain") then
-                makeupGain = math.lerp(1.0 / (standstillLoadFactor / midSpeedLoadFactor), 1.0, downforceEffect)
+                makeupGain = 1.0 / multAtVRef --math.lerp(1.0 / (standstillLoadFactor / midSpeedLoadFactor), 1.0, downforceEffect)
             end
 
             return lib.numberGuard(math.min(1.0, ret) * makeupGain), lib.numberGuard(math.min(1.0, multAtVRef), 1.0)
         end
-
-        -- ac.debug("downforceEffect", downforceEffect)
 
         local ffbMult, ffbMultAtVRef = getCompensatedFFBMult()
 
         finalFFB = finalFFB * ffbMult
         dfMultApplied = ffbMult
         dfMultAtRefSpeed = ffbMultAtVRef
-
-        -- ac.debug("DF comp | mult", ffbMult)
-        -- ac.debug("DF comp | top speed est", vData.perfData:getTopSpeedEstimate() * 3.6)
-        -- ac.debug("DF comp | top speed est 70%", vData.perfData:getTopSpeedEstimate() * 3.6 * 0.70)
-        -- ac.debug("DF comp | dynamic range", dfDynamicRange)
-        -- ac.debug("DF comp | real dynamic range", math.max(0.0, vData.perfData.fAxleDownforce * 0.5 / frontWheelLoadAtRest))
-        -- ac.debug("DF comp | effect", downforceEffect)
-        -- ac.debug("vData.perfData.fAxleDownforce", vData.perfData.fAxleDownforce)
-        -- ac.debug("Z) suggested df effect", math.round(lib.clamp01(2.0 / dfDynamicRange), 2) .. " - " .. math.round(lib.clamp01(4.0 / dfDynamicRange), 2))
+    else
+        runtimeData.downforceDynamicRange = -1.0
     end
 
     ffbRefLevelVDynamic = ffbRefLevelVDynamic * dfMultApplied
-    -- ac.debug("ffbRefLevelVDynamic", ffbRefLevelVDynamic)
+    ac.debug("Gen | FFB est at vCurrent", ffbRefLevelVDynamic, -1.0, 1.0)
 
     -- brake feel
 
@@ -686,7 +676,6 @@ local function processFFB(ffbValue, dt)
     local brakeFeelWithABS = getConfigValue("brakeFeelWithABS")
     local brakeFeelAllowed = (vData.vehicle.absMode == 0) or brakeFeelWithABS
     if brakeFeelAllowed and brakeFeel > 1e-6 then
-        -- ac.debug("brakeFeelClock", os.clock())
         local frontLongitudinalForce = (vData.vehiclePR.wheels[0].fx + vData.vehiclePR.wheels[1].fx) * 0.5
         if getConfigValue("brakeFeelFilter") then
             frontLongitudinalForce = brakeFeelFilter:process(frontLongitudinalForce)
@@ -696,7 +685,7 @@ local function processFFB(ffbValue, dt)
 
         local refForce = vData.perfData:getFrontPeakLongitudinalForceEst(frontWheelLoadAtRest * 1.4) -- the multiplier accounts for weight shifting to the front under braking. downforce is not included in this on purpose so the added force will scale with it
         local frontLongitudinalForceNd = frontLongitudinalForce / refForce
-        -- ac.debug("Brk feel | frontLongitudinalForceNd", frontLongitudinalForceNd, 0.0, 2.0)
+        ac.debug("Brk feel | front brake force nd", frontLongitudinalForceNd, 0.0, 2.0)
         local peakFrac = 5.0 -- 3.5 matches SAT
         local longitudinalFeelExponent = getConfigValue("brakeFeelExponent")
         local effectPeakStrength = brakeFeel * ffbRefLevelVRef * dfMultAtRefSpeed
@@ -730,7 +719,6 @@ local function processFFB(ffbValue, dt)
     -- oversteer feel
 
     local oversteerFeelProtectionFade = math.smoothstep(oversteerFeelConditionSmoother:get(math.min((vData.nWheelsAirborne >= 3) and 0.0 or 1.0, 1.0 - lastCollisionProtectionBlend * 0.5), dt)) -- fades out oversteer feel if either car car is airborne or if collision protection is active
-    -- ac.debug("oversteerFeelProtectionFade", oversteerFeelProtectionFade, 0.0, 1.0)
 
     local oversteerFeel = getConfigValue("oversteerFeel")
     if oversteerFeel > 1e-6 then
@@ -747,7 +735,7 @@ local function processFFB(ffbValue, dt)
         -- ac.debug("oversteer 2", math.abs(rAxleHVelAngle - math.deg(vData.vehiclePR.localAngularVelocity.y) * 0.5) / rearPeakSlipAngle, 0.0, 4.0)
         -- ac.debug("oversteer 2", math.abs(rAxleHVelAngle + (rAxleHVelAngle - prevRAxleHVelAngle) / dt * 0.5) / rearPeakSlipAngle, 0.0, 4.0)
 
-        prevRAxleHVelAngle = rAxleHVelAngle
+        -- prevRAxleHVelAngle = rAxleHVelAngle
 
         if getConfigValue("oversteerFeelMakeupGain") then
             finalFFB = finalFFB * (1.0 / (oversteerFeel + 1.0)) -- // TODO maybe slightly reduced strength for this?
@@ -775,8 +763,6 @@ local function processFFB(ffbValue, dt)
             else
                 localRearZ = localRearZ + localWheelPos.z
             end
-
-            -- ac.debug("Col prot | W" .. i .. " pos", localWheelPos)
         end
         localFrontZ = localFrontZ * 0.5
         localRearZ = localRearZ * 0.5
@@ -784,8 +770,8 @@ local function processFFB(ffbValue, dt)
 
         local bottomTolerance = vData.vehicle.aabbSize.y * 0.05 + math.lerp(vData.vehicle.rideHeight[0], vData.vehicle.rideHeight[1], lib.inverseLerp(localFrontZ, localRearZ, collisionPhysicsPos.z))
 
-        local collPosTmp = collisionPhysicsPos:clone()
-        collPosTmp.y = highestContactPatchY + bottomTolerance
+        -- local collPosTmp = collisionPhysicsPos:clone()
+        -- collPosTmp.y = highestContactPatchY + bottomTolerance
         -- ac.debug("Col prot | collision", collisionPhysicsPos)
         -- ac.debug("Col prot | bottom tolerance", collPosTmp)
 
@@ -823,16 +809,14 @@ local function processFFB(ffbValue, dt)
         end
         local finalCollisionProtectionBlend = collisionProtectionBlend
         local smoothingTime = 0.22
-        -- ac.debug("col smoothing t", getExponentialDecayBlend(dt, smoothingTime * finalCollisionProtectionBlend))
         ffbPeakProtected = math.lerp(ffbPeakProtected, ffbUsed, getExponentialDecayBlend(dt, smoothingTime * finalCollisionProtectionBlend))
         local peakProtectionDiff = 0.075 -- allows a small amount of deviation from the filtered version
         local ffbProtected2 = lib.clampEased(ffbUsed, ffbPeakProtected - math.abs(ffbRefLevelVDynamic) * peakProtectionDiff, ffbPeakProtected + math.abs(ffbRefLevelVDynamic) * peakProtectionDiff, 0.5)
-        -- ac.debug("Col prot | protection blend", finalCollisionProtectionBlend, 0.0, 1.0)
+        ac.debug("Col prot | protection blend", finalCollisionProtectionBlend, 0.0, 1.0)
         finalFFB = ffbProtected2
         lastCollisionProtectionBlend = finalCollisionProtectionBlend
     else
         ffbPeakProtected = finalFFB
-        -- ffbPeakProtected = math.lerp(ffbPeakProtected, finalFFB, getExponentialDecayBlend(dt, 0.22 * 0.5))
         lastCollisionProtectionBlend = 0.0
     end
 
@@ -931,10 +915,7 @@ local function processFFB(ffbValue, dt)
 
     prevEngagedGear = engagedGear
 
-    ac.debug("tSinceEngagedGearChanged", (now - lastEngagedGearChange), 0.0, 1.0)
-
-    -- ac.debug("Haptics | raw RPM", rawExtrapolatedRPM, 0, math.round(vData.perfData.maxRPM * 1.2 / 1000) * 1000)
-    -- ac.debug("Haptics | smooth RPM", smoothExtrapolatedRPM, 0, math.round(vData.perfData.maxRPM * 1.2 / 1000) * 1000)
+    local sineVibrationExponent = 0.25
 
     if vibrationSource > 0 then
         local vibrationLevel = getConfigValue("vibrationLevel")
@@ -949,14 +930,14 @@ local function processFFB(ffbValue, dt)
             end
 
             local vibrationFrequency = vibrationBaseFrequency
-            local finalFeedback = vibrationFeedbackSmoother:getWithRate(shiftWarning and 1.0 or 0.0, dt, vibrationFrequency * 1.5)
+            local finalFeedback = vibrationFeedbackSmoother:getWithRate(shiftWarning and 1.0 or 0.0, dt, vibrationFrequency * 1.25) -- was 1.5
 
-            -- ac.debug("HAP vibration feedback", shiftWarning and 1.0 or 0.0, 0.0, 1.0)
-            -- ac.debug("HAP vibration feedback smooth", finalFeedback, 0.0, 1.0)
+            ac.debug("Hap | vibration feedback raw", shiftWarning and 1.0 or 0.0, 0.0, 1.0)
+            ac.debug("Hap | vibration feedback smooth", finalFeedback, 0.0, 1.0)
 
             if finalFeedback > 0.01 then
                 vibrationPhase = (vibrationPhase + vibrationFrequency * dt) % 1.0
-                local vibrationAdditive = sineGenerator(vibrationPhase, 0.25, true) * (ffbRefLevelVRef * dfMultAtRefSpeed) * finalFeedback * vibrationLevel
+                local vibrationAdditive = sineGenerator(vibrationPhase, sineVibrationExponent, true) * (ffbRefLevelVRef * dfMultAtRefSpeed) * finalFeedback * vibrationLevel
                 finalFFB = finalFFB + vibrationAdditive * lowSpeedFade
             else
                 vibrationPhase = 0.0
@@ -967,9 +948,8 @@ local function processFFB(ffbValue, dt)
             local feedbackValue = 0.0
             local feedbackRampBegin = 0.4
             local feedbackRampEnd = 1.0
-            local feedbackBaseline = 0.3
-
-            ac.debug("rearNdSlip", vData.rearNdSlip, 0.0, 2.0)
+            local feedbackBaseline = 0.35
+            local frequencyRampEnd = 2.0
 
             local function getNdSlipRatioTarget(ndSlipAngleAbs, ndTarget)
                 return (1.0 - ((0.85 / ndTarget * lib.clamp01(ndSlipAngleAbs)) ^ 2.4)) * ndTarget
@@ -991,9 +971,6 @@ local function processFFB(ffbValue, dt)
                 local startMult = peakUsed * feedbackRampBegin
                 local endMult = peakUsed * feedbackRampEnd
 
-                -- ac.debug("rampStart", startMult, 0.0, 1.0)
-                -- ac.debug("rampEnd", endMult, 0.0, 1.0)
-
                 return calcProgressiveFeedback(
                     currentSlipRatio,
                     peakSlipRatio * startMult,
@@ -1001,9 +978,6 @@ local function processFFB(ffbValue, dt)
                     feedbackBaseline
                 )
             end
-
-            -- ac.debug("front peak feedback", getNdSlipRatioTarget(frontNdSlipAngleAbs, 1.0))
-            -- ac.debug("frontNdSlipAngle", frontNdSlipAngleAbs, 0.0, 1.0)
 
             local function getBrakeHelpFeedback() -- only considers front wheels for now
                 if vData.vehiclePR.brake > 0.01 and vData.vehicle.absMode < 1 then
@@ -1040,15 +1014,15 @@ local function processFFB(ffbValue, dt)
                 feedbackValue = calcProgressiveFeedback(math.abs(vData.frontSlipDeg), frontPeakSlipAngle * 0.95, frontPeakSlipAngle * 1.5, feedbackBaseline)
             end
 
-            local vibrationFrequency = lib.logInterpolation(vibrationBaseFrequency, vibrationBaseFrequency * 2.0, (feedbackValue - feedbackBaseline) / (1.0 - feedbackBaseline))
+            local vibrationFrequency = lib.logInterpolation(vibrationBaseFrequency, vibrationBaseFrequency * frequencyRampEnd, (feedbackValue - feedbackBaseline) / (1.0 - feedbackBaseline))
             local finalFeedback = vibrationFeedbackSmoother:getWithRate(feedbackValue, dt, vibrationFrequency * 1.5)
 
-            ac.debug("HAP vibration feedback", feedbackValue, 0.0, 1.0)
-            ac.debug("HAP vibration feedback smooth", finalFeedback, 0.0, 1.0)
+            ac.debug("Hap | vibration feedback raw", feedbackValue, 0.0, 1.0)
+            ac.debug("Hap | vibration feedback smooth", finalFeedback, 0.0, 1.0)
 
             if feedbackValue > 0.01 then
                 vibrationPhase = (vibrationPhase + vibrationFrequency * dt) % 1.0
-                local vibrationAdditive = sineGenerator(vibrationPhase, 0.25, true) * (ffbRefLevelVRef * dfMultAtRefSpeed) * feedbackValue * 1.5 * vibrationLevel
+                local vibrationAdditive = sineGenerator(vibrationPhase, sineVibrationExponent, true) * (ffbRefLevelVRef * dfMultAtRefSpeed) * feedbackValue * 1.5 * vibrationLevel
                 finalFFB = finalFFB + vibrationAdditive * lowSpeedFade
             else
                 vibrationPhase = 0.0
@@ -1106,25 +1080,23 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
         end)
 
         if not success then
-            ac.error("Something exploded")
+            ac.error("Something exploded. This should stop in a second or so, otherwise something is up.")
 
             return ffbValue, ffbDamper
         end
-
-        -- finalFFB = processFFB(ffbValue, dt)
     else
         onProcessingSkip(ffbValue, vehicle)
     end
 
     local sim = ac.getSim()
 
-    ac.debug("vehicle.isInPitlane", vehicle.isInPitlane)
-    ac.debug("sim.raceFlagType", sim.raceFlagType)
-    ac.debug("sim.raceSessionType", sim.raceSessionType)
-    ac.debug("sim.isSessionFinished", sim.isSessionFinished) -- turns true after crossing the finish, but im using flag type instead of this
-    ac.debug("sim.isSessionStarted", sim.isSessionStarted) -- false before the race start, then stays true after the lights go out until the next session
-    ac.debug("sim.currentSessionIndex", sim.currentSessionIndex)
-    ac.debug("sim.isOnlineRace", sim.isOnlineRace)
+    -- ac.debug("vehicle.isInPitlane", vehicle.isInPitlane)
+    -- ac.debug("sim.raceFlagType", sim.raceFlagType)
+    -- ac.debug("sim.raceSessionType", sim.raceSessionType)
+    -- ac.debug("sim.isSessionFinished", sim.isSessionFinished) -- turns true after crossing the finish, but im using flag type instead of this
+    -- ac.debug("sim.isSessionStarted", sim.isSessionStarted) -- false before the race start, then stays true after the lights go out until the next session
+    -- ac.debug("sim.currentSessionIndex", sim.currentSessionIndex)
+    -- ac.debug("sim.isOnlineRace", sim.isOnlineRace)
 
     if sim.isOnlineRace and sim.isSessionStarted and sim.raceSessionType == ac.SessionType.Race then
         if sim.raceFlagType == ac.FlagType.Finished and tSinceRaceFinished >= 0.0 then
@@ -1143,13 +1115,13 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
 
     finalFFB = finalFFB * postRaceFFBMultSmooth
 
-    ac.debug("postRaceMultSmooth", postRaceFFBMultSmooth)
+    ac.debug("Gen | current post race mult", postRaceFFBMultSmooth, 0.0, 1.0)
 
     -- no more modifying ffb after this
 
     local finalGuardedFFB = lib.numberGuard(finalFFB, ffbValue)
 
-    ac.debug("Gen | Final FFB", finalGuardedFFB, -1.0, 1.0)
+    ac.debug("Gen | final FFB", finalGuardedFFB, -1.0, 1.0)
 
     runtimeData.rawFFB = ffbValue
     runtimeData.finalFFB = finalGuardedFFB
