@@ -22,6 +22,7 @@ M.generalConfig = {
     lockupFeel = ac.StructItem.float(),
     lockupFeelWithABS = ac.StructItem.boolean(),
     extraSAT = ac.StructItem.float(),
+    extraSATSuspensionCompensation = ac.StructItem.boolean(),
     extraSATMakeupGain = ac.StructItem.boolean(),
     oversteerFeel = ac.StructItem.float(),
     oversteerFeelAggression = ac.StructItem.float(),
@@ -71,6 +72,8 @@ M.carSpecificConfig = {
     lockupFeelWithABS = ac.StructItem.boolean(),
     OVERRIDE_extraSAT = ac.StructItem.boolean(),
     extraSAT = ac.StructItem.float(),
+    OVERRIDE_extraSATSuspensionCompensation = ac.StructItem.boolean(),
+    extraSATSuspensionCompensation = ac.StructItem.boolean(),
     OVERRIDE_extraSATMakeupGain = ac.StructItem.boolean(),
     extraSATMakeupGain = ac.StructItem.boolean(),
     OVERRIDE_oversteerFeel = ac.StructItem.boolean(),
@@ -111,6 +114,7 @@ M.defaultSettings = {
     lockupFeel = 0.0,
     lockupFeelWithABS = true,
     extraSAT = 0.0,
+    extraSATSuspensionCompensation = false,
     extraSATMakeupGain = false,
     oversteerFeel = 0.0,
     oversteerFeelAggression = 1.0,
@@ -166,7 +170,8 @@ M.runtimeData = {
     ffbFinalHistoryCount = ac.StructItem.int32(),
     factoryResetPerformed = ac.StructItem.boolean(), -- for some reason shared events dont trigger, so i have to do this
     appHeartbeatClock = ac.StructItem.double(), -- stops if the ui app is closed
-    autoGainLevel = ac.StructItem.int32() -- integer percentage, negative means not available
+    autoGainLevel = ac.StructItem.int32(), -- integer percentage, negative means not available
+    downforceDynamicRange = ac.StructItem.float() -- negative means not available
 }
 
 -- Also ensures the directory exists

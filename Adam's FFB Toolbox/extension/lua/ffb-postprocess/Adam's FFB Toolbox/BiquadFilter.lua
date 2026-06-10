@@ -18,16 +18,6 @@
 local BiquadFilter = {}
 BiquadFilter.__index = BiquadFilter
 
--- ---@alias BiquadFilter.FilterType
--- ---| `BiquadFilter.FilterType.LowPass` @Value: 'LowPass'.
--- ---| `BiquadFilter.FilterType.HighPass` @Value: 'HighPass'.
--- ---| `BiquadFilter.FilterType.Peak` @Value: 'Peak'.
--- BiquadFilter.FilterType = {
---     LowPass = "LowPass", ---@type BiquadFilter.FilterType #Value: 'LowPass'.
---     HighPass = "HighPass", ---@type BiquadFilter.FilterType #Value: 'HighPass'.
---     Peak = "Peak" ---@type BiquadFilter.FilterType #Value: 'Peak'.
--- }
-
 ---Calculates low-pass filter parameters based on nyquist and corner frequencies.
 ---@param sampleRate number Sample rate in Hz.
 ---@param nyquistFrequency number Nyquist frequency in Hz.
