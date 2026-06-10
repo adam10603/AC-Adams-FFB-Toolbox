@@ -1,3 +1,11 @@
+-- csp doesnt install the files in the right location, so i have to move the folder like this, very fun
+
+local badModulePath = ac.getFolder(ac.FolderID.ExtRoot) .. "\\ffb-postprocess\\Adam's FFB Toolbox"
+local goodModulePath = ac.getFolder(ac.FolderID.ExtLua) .. "\\ffb-postprocess\\Adam's FFB Toolbox"
+if io.dirExists(badModulePath) and not io.dirExists(goodModulePath) then
+    io.move(badModulePath, goodModulePath)
+end
+
 local updater = require("updater")
 -- local json = require("json")
 ---@diagnostic disable-next-line: different-requires
@@ -372,20 +380,7 @@ end
 
 local enableClicked = 0
 local function enableScript()
-
-    -- local ffbScriptsDir = ac.getFolder(ac.FolderID.ExtLua) .. "\\ffb-postprocess"
-    -- local sourceDir = ac.getFolder(ac.FolderID.ScriptOrigin) .. "\\test"
-    -- local targetDir = ffbScriptsDir .. "\\test"
-
-    -- io.createDir(targetDir)
-
-    -- io.scanDir(sourceDir, function (name, attributes)
-    --     if attributes.isDirectory then
-    --         return
-    --     end
-
-    --     io.copyFile(sourceDir .. "\\" .. name, targetDir .. "\\" .. name, false)
-    -- end)
+    -- applying settings
 
     gameConfigFiles["ffb_tweaks.ini"]:set("POSTPROCESSING_SCRIPT", "IMPLEMENTATION", "Adam's FFB Toolbox")
     gameConfigFiles["ffb_tweaks.ini"]:set("POSTPROCESSING_SCRIPT", "ENABLED", 1)
@@ -394,7 +389,7 @@ local function enableScript()
 
     enableClicked = os.clock()
 
-    -- i have to do this jank shit here because csp cannot keep its ini formats consistent with itself, very fun
+    -- csp cannot keep its ini formats consistent with itself so i have to do this jank shit here, very fun once again
 
     local iniPath = ac.getFolder(ac.FolderID.ExtCfgUser) .. "\\ffb_tweaks.ini"
     local iniContents = storage.readFile(iniPath)
@@ -405,6 +400,12 @@ local function enableScript()
     end
 
     gameConfigFiles["ffb_tweaks.ini"] = ac.INIConfig.cspModule(ac.CSPModuleID.FFBTweaks) -- not necessary but just to be sure
+
+    -- fr tho Ilja gets tens of thousands of $ every month on pateron and half the shit he makes doesnt fucking work so i have to find all kinds of workarounds for everything
+    -- half the api in csp is also completely fucking broken and full of events that dont fire, variables that have the wrong values etc.
+    -- did i even mention that the reason i include an open source json library with my mods is because the json parsing built into csp is (or at least was) broken? thats fun too
+    -- not the kind of work id award millions to, but what do i know
+    -- anyway hopefully this works, and if it doesnt then go bother Ilja about it not me
 
     ac.reloadControlSettings()
 end
