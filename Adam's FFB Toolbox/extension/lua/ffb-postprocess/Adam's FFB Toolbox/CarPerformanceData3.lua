@@ -259,7 +259,7 @@ function M:new(vehicle, cPhys)
     end
 
     if aeroIni:get("MAP_0", "NAME", "") ~= "" then
-        ac.setMessage("Adam's FFB Toolbox", "The FFB gain-related options might not work correctly on this car. Please double check your FFB strength!", nil, 10.0)
+        ac.setMessage("Adam's FFB Toolbox", "Downforce compensation and FFB gain-related options might not work correctly on this car!", nil, 10.0)
     end
 
     return obj
@@ -761,54 +761,54 @@ function M:getSteeringRackTorqueFromFrontMz(wheel0Mz, wheel1Mz, wheel0Normal, wh
     return steeringRackTorque
 end
 
----Returns the expected peak
----@param avgWheelLoad number Per-wheel load in N
----@param staticTireRadius number Front tire radius (static)
----@param ffbBase number vehicle.ffbBase
----@param mz? number (OPTIONAL) In Nm
----@return number FFBPeakEstimate Estimated peak FFB strength before being multiplied by either the global FFB gain or the per-car FFB gain.
-function M:getFFBPeakStrengthEstimateOld(avgWheelLoad, staticTireRadius, ffbBase, mz)
-    mz = mz or self:getMzEstimate(avgWheelLoad, staticTireRadius)
-    local load1 = avgWheelLoad * peakSATWeightShift
-    local load2 = avgWheelLoad * (2.0 - peakSATWeightShift)
-    local lateralForce1 = self:getFrontPeakLateralForceEst(load1) * 0.78
-    local lateralForce2 = self:getFrontPeakLateralForceEst(load2) * 0.78 * 0.96 -- slightly reduced because of cringe camber and stuff
-    local loadedRadius1 = staticTireRadius - load1 / self.frontTireRate
-    local loadedRadius2 = staticTireRadius - load2 / self.frontTireRate
-    local totalContactForce = vec3()
-    tmpVec2:set(lateralForce1, 0.0, 0.0)
-    tmpVec1:set(0.0, -loadedRadius1, 0.0):sub(self.steerBasisCenter):cross(tmpVec2)
-    totalContactForce:add(tmpVec1)
-    tmpVec2:set(lateralForce2, 0.0, 0.0)
-    tmpVec1:set(0.0, -loadedRadius2, 0.0):sub(self.steerBasisCenter):cross(tmpVec2)
-    totalContactForce:add(tmpVec1)
-    local steerAxisTorque = self.steerBasisAxis:dot(totalContactForce)
-    local mzMult = self.steerBasisAxis:dot(tmpVec1:set(0.0, 1.0, 0.0))
-    steerAxisTorque = math.abs(steerAxisTorque) + mz * mzMult
-    local ffbStrength = steerAxisTorque / 600.0 * ffbBase
-    return ffbStrength
-end
+-- ---Returns the expected peak
+-- ---@param avgWheelLoad number Per-wheel load in N
+-- ---@param staticTireRadius number Front tire radius (static)
+-- ---@param ffbBase number vehicle.ffbBase
+-- ---@param mz? number (OPTIONAL) In Nm
+-- ---@return number FFBPeakEstimate Estimated peak FFB strength before being multiplied by either the global FFB gain or the per-car FFB gain.
+-- function M:getFFBPeakStrengthEstimateOld(avgWheelLoad, staticTireRadius, ffbBase, mz)
+--     mz = mz or self:getMzEstimate(avgWheelLoad, staticTireRadius)
+--     local load1 = avgWheelLoad * peakSATWeightShift
+--     local load2 = avgWheelLoad * (2.0 - peakSATWeightShift)
+--     local lateralForce1 = self:getFrontPeakLateralForceEst(load1) * 0.78
+--     local lateralForce2 = self:getFrontPeakLateralForceEst(load2) * 0.78 * 0.96 -- slightly reduced because of cringe camber and stuff
+--     local loadedRadius1 = staticTireRadius - load1 / self.frontTireRate
+--     local loadedRadius2 = staticTireRadius - load2 / self.frontTireRate
+--     local totalContactForce = vec3()
+--     tmpVec2:set(lateralForce1, 0.0, 0.0)
+--     tmpVec1:set(0.0, -loadedRadius1, 0.0):sub(self.steerBasisCenter):cross(tmpVec2)
+--     totalContactForce:add(tmpVec1)
+--     tmpVec2:set(lateralForce2, 0.0, 0.0)
+--     tmpVec1:set(0.0, -loadedRadius2, 0.0):sub(self.steerBasisCenter):cross(tmpVec2)
+--     totalContactForce:add(tmpVec1)
+--     local steerAxisTorque = self.steerBasisAxis:dot(totalContactForce)
+--     local mzMult = self.steerBasisAxis:dot(tmpVec1:set(0.0, 1.0, 0.0))
+--     steerAxisTorque = math.abs(steerAxisTorque) + mz * mzMult
+--     local ffbStrength = steerAxisTorque / 600.0 * ffbBase
+--     return ffbStrength
+-- end
 
----Returns the expected peak
----@param avgWheelLoad number Per-wheel load in N
----@param staticTireRadius number Front tire radius (static)
----@param ffbBase number vehicle.ffbBase
----@param mz? number (OPTIONAL) In Nm
----@return number FFBPeakEstimate Estimated peak FFB strength before being multiplied by either the global FFB gain or the per-car FFB gain.
-function M:getFFBPeakStrengthEstimateOlder(avgWheelLoad, staticTireRadius, ffbBase, mz)
-    mz = mz or self:getMzEstimate(avgWheelLoad, staticTireRadius)
-    -- local lateralForce = (self:getFrontPeakLateralForceEst(avgWheelLoad * peakCorneringWeightShift) + self:getFrontPeakLateralForceEst(avgWheelLoad * (2.0 - peakCorneringWeightShift)))
-    local lateralForce = (self:getFrontPeakLateralForceEst(avgWheelLoad * peakSATWeightShift) + self:getFrontPeakLateralForceEst(avgWheelLoad * (2.0 - peakSATWeightShift)) * 0.95) * 0.78 -- the lateral curve is roughly 0.78 at the point where SAT peaks. also using a multiplier for the inside wheel grip to account for cringe camber and stuff
-    local loadedRadius = staticTireRadius - avgWheelLoad / self.frontTireRate
-    tmpVec2:set(lateralForce, 0.0, 0.0)
-    tmpVec1:set(0.0, -loadedRadius, 0.0):sub(self.steerBasisCenter):cross(tmpVec2)
-    local steerAxisTorque = tmpVec1:dot(self.steerBasisAxis)
-    local mzMult = self.steerBasisAxis:dot(tmpVec1:set(0.0, 1.0, 0.0))
-    -- steerAxisTorque = math.abs(steerAxisTorque) + mz * 0.55 * mzMult
-    steerAxisTorque = math.abs(steerAxisTorque) + mz * mzMult
-    local ffbStrength = steerAxisTorque / 600.0 * ffbBase
-    return ffbStrength
-end
+-- ---Returns the expected peak
+-- ---@param avgWheelLoad number Per-wheel load in N
+-- ---@param staticTireRadius number Front tire radius (static)
+-- ---@param ffbBase number vehicle.ffbBase
+-- ---@param mz? number (OPTIONAL) In Nm
+-- ---@return number FFBPeakEstimate Estimated peak FFB strength before being multiplied by either the global FFB gain or the per-car FFB gain.
+-- function M:getFFBPeakStrengthEstimateOlder(avgWheelLoad, staticTireRadius, ffbBase, mz)
+--     mz = mz or self:getMzEstimate(avgWheelLoad, staticTireRadius)
+--     -- local lateralForce = (self:getFrontPeakLateralForceEst(avgWheelLoad * peakCorneringWeightShift) + self:getFrontPeakLateralForceEst(avgWheelLoad * (2.0 - peakCorneringWeightShift)))
+--     local lateralForce = (self:getFrontPeakLateralForceEst(avgWheelLoad * peakSATWeightShift) + self:getFrontPeakLateralForceEst(avgWheelLoad * (2.0 - peakSATWeightShift)) * 0.95) * 0.78 -- the lateral curve is roughly 0.78 at the point where SAT peaks. also using a multiplier for the inside wheel grip to account for cringe camber and stuff
+--     local loadedRadius = staticTireRadius - avgWheelLoad / self.frontTireRate
+--     tmpVec2:set(lateralForce, 0.0, 0.0)
+--     tmpVec1:set(0.0, -loadedRadius, 0.0):sub(self.steerBasisCenter):cross(tmpVec2)
+--     local steerAxisTorque = tmpVec1:dot(self.steerBasisAxis)
+--     local mzMult = self.steerBasisAxis:dot(tmpVec1:set(0.0, 1.0, 0.0))
+--     -- steerAxisTorque = math.abs(steerAxisTorque) + mz * 0.55 * mzMult
+--     steerAxisTorque = math.abs(steerAxisTorque) + mz * mzMult
+--     local ffbStrength = steerAxisTorque / 600.0 * ffbBase
+--     return ffbStrength
+-- end
 
 -- -- For the whole front axle under cornering, but not compensated for suspension geometry yet. In Nm.
 -- function M:getMzEstimate(avgWheelLoad, staticTireRadius)
@@ -838,41 +838,41 @@ function M:getMzEstimate(avgWheelLoad, staticTireRadius)
     return (mz1 + mz2)
 end
 
--- For the whole front axle under cornering, but not compensated for suspension geometry yet. In Nm.
-function M:getMzEstimateOld(avgWheelLoad, staticTireRadius)
-    -- local cpLen = self:getFrontContactPatchLengthEstimate(avgWheelLoad, staticTireRadius)
-    -- return (self:getRearPeakLateralForceEst(avgWheelLoad * peakCorneringWeightShift) + self:getRearPeakLateralForceEst(avgWheelLoad * (2.0 - peakCorneringWeightShift))) * cpLen * 0.12 * 0.55
-    local loadPeak1 = avgWheelLoad * peakCorneringWeightShift
-    local loadPeak2 = avgWheelLoad * (2.0 - peakCorneringWeightShift)
-    local loadMz1 = avgWheelLoad * peakSATWeightShift
-    local loadMz2 = avgWheelLoad * (2.0 - peakSATWeightShift)
+-- -- For the whole front axle under cornering, but not compensated for suspension geometry yet. In Nm.
+-- function M:getMzEstimateOld(avgWheelLoad, staticTireRadius)
+--     -- local cpLen = self:getFrontContactPatchLengthEstimate(avgWheelLoad, staticTireRadius)
+--     -- return (self:getRearPeakLateralForceEst(avgWheelLoad * peakCorneringWeightShift) + self:getRearPeakLateralForceEst(avgWheelLoad * (2.0 - peakCorneringWeightShift))) * cpLen * 0.12 * 0.55
+--     local loadPeak1 = avgWheelLoad * peakCorneringWeightShift
+--     local loadPeak2 = avgWheelLoad * (2.0 - peakCorneringWeightShift)
+--     local loadMz1 = avgWheelLoad * peakSATWeightShift
+--     local loadMz2 = avgWheelLoad * (2.0 - peakSATWeightShift)
 
-    local cpLen1 = self:getFrontContactPatchLengthEstimate(loadMz1, staticTireRadius)
-    local cpLen2 = self:getFrontContactPatchLengthEstimate(loadMz2, staticTireRadius)
+--     local cpLen1 = self:getFrontContactPatchLengthEstimate(loadMz1, staticTireRadius)
+--     local cpLen2 = self:getFrontContactPatchLengthEstimate(loadMz2, staticTireRadius)
 
-    local mz1 = self:getRearPeakLateralForceEst(loadMz1) * 0.78 * cpLen1 * 0.12
-    local mz2 = self:getRearPeakLateralForceEst(loadMz2) * 0.78 * cpLen2 * 0.12
+--     local mz1 = self:getRearPeakLateralForceEst(loadMz1) * 0.78 * cpLen1 * 0.12
+--     local mz2 = self:getRearPeakLateralForceEst(loadMz2) * 0.78 * cpLen2 * 0.12
 
-    -- return (mz1 + mz2) * 0.65 -- for old cp length
-    return (mz1 + mz2) * 0.12
-end
+--     -- return (mz1 + mz2) * 0.65 -- for old cp length
+--     return (mz1 + mz2) * 0.12
+-- end
 
-function M:getMzEstimateOlder(avgWheelLoad, staticTireRadius)
-    local cpLen = self:getFrontContactPatchLengthEstimate(avgWheelLoad, staticTireRadius)
-    return (self:getRearPeakLateralForceEst(avgWheelLoad * peakCorneringWeightShift) + self:getRearPeakLateralForceEst(avgWheelLoad * (2.0 - peakCorneringWeightShift))) * cpLen * 0.12 * 0.55
-    -- local loadPeak1 = avgWheelLoad * peakCorneringWeightShift
-    -- local loadPeak2 = avgWheelLoad * (2.0 - peakCorneringWeightShift)
-    -- local loadMz1 = avgWheelLoad * peakSATWeightShift
-    -- local loadMz2 = avgWheelLoad * (2.0 - peakSATWeightShift)
+-- function M:getMzEstimateOlder(avgWheelLoad, staticTireRadius)
+--     local cpLen = self:getFrontContactPatchLengthEstimate(avgWheelLoad, staticTireRadius)
+--     return (self:getRearPeakLateralForceEst(avgWheelLoad * peakCorneringWeightShift) + self:getRearPeakLateralForceEst(avgWheelLoad * (2.0 - peakCorneringWeightShift))) * cpLen * 0.12 * 0.55
+--     -- local loadPeak1 = avgWheelLoad * peakCorneringWeightShift
+--     -- local loadPeak2 = avgWheelLoad * (2.0 - peakCorneringWeightShift)
+--     -- local loadMz1 = avgWheelLoad * peakSATWeightShift
+--     -- local loadMz2 = avgWheelLoad * (2.0 - peakSATWeightShift)
     
-    -- local cpLen1 = self:getFrontContactPatchLengthEstimate(loadMz1, staticTireRadius)
-    -- local cpLen2 = self:getFrontContactPatchLengthEstimate(loadMz2, staticTireRadius)
+--     -- local cpLen1 = self:getFrontContactPatchLengthEstimate(loadMz1, staticTireRadius)
+--     -- local cpLen2 = self:getFrontContactPatchLengthEstimate(loadMz2, staticTireRadius)
 
-    -- local mz1 = self:getRearPeakLateralForceEst(loadMz1) * 0.78 * cpLen1 * 0.12
-    -- local mz2 = self:getRearPeakLateralForceEst(loadMz2) * 0.78 * cpLen2 * 0.12
+--     -- local mz1 = self:getRearPeakLateralForceEst(loadMz1) * 0.78 * cpLen1 * 0.12
+--     -- local mz2 = self:getRearPeakLateralForceEst(loadMz2) * 0.78 * cpLen2 * 0.12
 
-    -- return (mz1 + mz2) * 0.667
-end
+--     -- return (mz1 + mz2) * 0.667
+-- end
 
 -- Crude estimation, only based on power and nothing else, could be improved. In m/s.
 function M:getTopSpeedEstimate()

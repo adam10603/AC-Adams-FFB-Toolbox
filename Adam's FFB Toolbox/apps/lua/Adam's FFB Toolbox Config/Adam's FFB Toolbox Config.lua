@@ -4,6 +4,23 @@ local badModulePath = ac.getFolder(ac.FolderID.ExtRoot) .. "\\ffb-postprocess\\A
 local goodModulePath = ac.getFolder(ac.FolderID.ExtLua) .. "\\ffb-postprocess\\Adam's FFB Toolbox"
 if io.dirExists(badModulePath) and not io.dirExists(goodModulePath) then
     io.move(badModulePath, goodModulePath)
+elseif io.dirExists(badModulePath) and io.dirExists(goodModulePath) then
+    local anyCopyFailed = false
+    io.scanDir(badModulePath, nil, function (fileName, fileAttributes, callbackData)
+        if not fileAttributes.isDirectory then
+            if not io.copyFile(badModulePath .. "\\" .. fileName, goodModulePath .. "\\" .. fileName, false) then
+                anyCopyFailed = true
+            end
+        end
+    end)
+
+    if anyCopyFailed then
+        ac.error("Plugin cant be updated, blame Ilja")
+        ac.setMessage("Adam's FFB Toolbox", "ERROR: Failed to update plugin. Check the mod's page for solutions.", 'illegal', 10.0)
+    else
+        io.deleteDir(badModulePath)
+        ac.log("Plugin updated")
+    end
 end
 
 local updater = require("updater")
@@ -157,9 +174,9 @@ end)
 
 local tooltips = {
     scriptEnabled = "Toggles all FFB processing by this plugin.\nTurning this off leaves the FFB signal unchanged.",
-    factoryReset = "Resets all settings to default, but keeps your presets.\n\nClick twice to confirm!",
+    factoryReset = "Resets all settings to default and removes every per-car config, but keeps your presets.\n\nClick twice to confirm!",
     resetCarSetting = "Removes the car-specific override from this setting.",
-    autoAdjustGain = "Automatically sets your per-car FFB gain to the recommended value below.\n\nThe recommended gain will bring the car's actual FFB level in line with your global FFB gain setting.\n\nThis makes the FFB strength feel more consistent across different cars.",
+    autoAdjustGain = "Automatically sets your per-car FFB gain to the recommended value below.\n\nThe recommended gain will bring the car's actual FFB level in line with your global FFB gain setting.\n\nThis makes the FFB strength feel more consistent across different cars.\n\nWARNING: Avoid using other auto-gain apps when this setting is active, they might conflict with each other.",
     autoGainOffset = "Changes the level that the automatic gain targets.",
     absFilterEnabled = "Applies a small amount of filtering to the FFB only while the ABS is active.\n\nThis will reduce ABS vibrations in your wheel when you're braking, but won't change the FFB in any other situation.\n\nThis is separate from the general filter setting below, the two can be used at the same time.",
     filterEnabled = "Enables the general smoothing of the FFB signal through a low-pass filter.\n\nFiltering can help to reduce unwanted noise or high-frequency vibrations.\n\nThis is separate from AC's built-in filter setting, and using both at the same time is not recommended.",
@@ -176,11 +193,12 @@ local tooltips = {
     lockupFeel = "Reduces FFB strength when the front wheels lock up.\n\nThis also happens naturally, but this setting will exaggerate the effect.\n\nThis effect is highly recommended if you're also using the brake feel setting, since that setting alone only communicates lockups to a limited extent.",
     lockupFeelWithABS = "Disables the lockup feel effect when ABS is present.\n\nThis will avoid the FFB strength fluctuating even if the ABS momentarily goes over the grip limit slightly.", -- inverted on ui
     extraSAT = "Adds extra self-aligning torque (SAT) to the FFB.\n\nSAT is the part of the FFB that makes the initial force stronger when turning in, then reduce as you steer more and reach the grip limit of the tires.\n\nThis setting will add additional SAT on top of the amount already in the FFB, making it easier to feel the grip limit of the tires and to feel understeer.\n\nThis can be especially useful in cars with a high caster angle.",
+    extraSATSuspensionCompensation = "The amount of extra SAT will be scaled according to the car's suspension geometry.\n\nIf a car has weak SAT by default then the added amount will be higher. If a car already has a strong SAT feeling then the added amount will be much less.\n\nThis means the extra SAT you add will feel more consistent across different cars.",
     extraSATMakeupGain = "If you add extra SAT to the FFB, this setting will compensate by decreasing the overall FFB level accordingly.\n\nThis basically turns the extra SAT into something similar to AC's understeer effect.",
     oversteerFeel = "Makes your wheel pull stronger in the countersteer direction when the car slides / oversteers.",
     oversteerFeelAggression = "Determines how large a slide has to be for the oversteer effect to kick in.\n\nLower = the effect already engages in a shallow slide.\n\nHigher = a bigger slide is needed to trigger the effect.",
     oversteerFeelMakeupGain = "If you add extra oversteer force, this setting will compensate by decreasing the overall FFB level accordingly.",
-    vibrationSource = "Selects what triggers the vibration effect.\n\nBraking help = progressive vibration during braking when there's no ABS. Starts lighter then gets stronger as you approach the point of locking up.\n\nThrottle help = progressive vibration during acceleration when there's no TCS. Starts lighter then gets stronger as you approach the point of wheelspin.\n\nBraking + throttle help = both of the above, depending on whether you're braking or accelerating.\n\nUndersteer = progressive vibration to warn if you're steering too much. This one starts right at the grip limit and gets stronger the more you push into understeer.\n\nGear shift warning = vibration to signal the need to shift up. This is based on shifting points calculated from the engine's power curve and the gear ratios of the car. If the car has an MGU-K then the car's own pre-configured shifting point is used.\n\nFor best results AC's own slip effect should be turned off to avoid it conflicting with this vibration effect.",
+    vibrationSource = "Selects what triggers the vibration effect.\n\nBraking help = progressive vibration during braking when there's no ABS. Starts lighter then gets stronger as you approach the point of locking up.\n\nThrottle help = progressive vibration during acceleration when there's no TCS. Starts lighter then gets stronger as you approach the point of wheelspin.\n\nBraking + throttle help = both of the above, depending on whether you're braking or accelerating.\n\nUndersteer = progressive vibration to warn if you're steering too much. This one starts right around the grip limit and gets stronger the more you push into understeer.\n\nGear shift warning = vibration to signal the need to shift up. This is based on shifting points calculated from the engine's power curve and the gear ratios of the car, or if these can't be calculated then the car's default shifting point is used. The vibration warning is timed in a way that accounts for reaction time, so you'll shift at the correct point by just reacting to it without having to anticipate it.\n\nFor best results AC's own slip effect should be turned off to avoid it conflicting with this vibration effect.",
     vibrationLevel = "The strength of the vibration effect.",
     vibrationBaseFrequency = "The frequency of the vibration effect.\n\nThe actual frequency of the vibration output might be modulated further depending on the vibration source, but this setting is always used as the baseline.",
     peakReduction = "Temporarily filters out sudden peaks from the FFB when a collision is detected.\n\nThis helps to avoid unpleasant or dangerous jolts in your wheel when hitting a wall or another car.",
@@ -196,7 +214,7 @@ local tooltips = {
 }
 
 tooltips["controls.ini:STEER:FF_GAIN"] = "Your global FFB level that isn't specific to the car."
-tooltips["controls.ini:FF_ENHANCEMENT:CURBS"] = "Adds a vibration effect to curbs that don't have 3D bumps.\n\nAround 40% makes the strength of this match the feel of 3D curbs, which makes for a consistent experience."
+tooltips["controls.ini:FF_ENHANCEMENT:CURBS"] = "Adds a vibration effect to curbs that don't have 3D bumps.\n\nAround 40% makes the strength of this match the feel of 3D curbs, which makes curbs feel more consistent.\n\nHowever, this also gets applied on surfaces such as cobblestone, so vintage road courses for example could feel more bumpy than they really are when using this."
 tooltips["controls.ini:FF_ENHANCEMENT:ABS"] = "Adds additional vibration when the ABS is active.\n\nHowever, since the ABS in AC produces very crude brake pressure pulses, it can already be felt very clearly in the FFB without needing any extra vibrations."
 tooltips["controls.ini:FF_ENHANCEMENT:ROAD"] = "Adds a randomized vibration to the FFB at all times.\n\nIn theory this is there to make flat surfaces feel less boring, but in practice it just adds a very high frequency noise that I don't recommend using."
 tooltips["controls.ini:FF_ENHANCEMENT:SLIPS"] = "Adds a vibration effect when the tires go over the grip limit.\n\nThis can generally be useful, however, this plugin provides better alternatives under the haptics section.\n\nKeep this at 0% if you intend to use the haptics from this plugin instead."
@@ -269,7 +287,7 @@ local tmpVec2 = vec2()
 local tmpVec3 = vec2()
 
 local factoryPresets = {}
-factoryPresets["Author's preference"] = '{"oversteerFeel":0,"vibrationSource":0,"filterEnabled":false,"filterFrequency":0,"downforceCompMode":0,"downforceCompPercentage":0,"ffbLevelAfterFinish":0.80000001192093,"peakReduction":false,"vibrationBaseFrequency":10,"vibrationLevel":0,"_version":100,"downforceCompDynamicRange":0,"brakeFeel":0,"brakeFeelExponent":0.5,"lockupFeel":0,"extraSAT":0}'
+factoryPresets["Author's preference"] = '{"extraSAT":1.5,"filterFrequency":32,"extraSATSuspensionCompensation":true,"extraSATMakeupGain":true,"oversteerFeel":0.69999998807907,"autoAdjustGain":true,"oversteerFeelMakeupGain":false,"_version":100,"downforceCompMode":2,"lockupFeelWithABS":false,"downforceCompPercentage":1,"ffbLevelAfterFinish":0.050000000745058,"oversteerFeelAggression":1,"downforceCompDynamicRange":1.2999999523163,"vibrationBaseFrequency":15,"downforceCompMakeupGain":true,"brakeFeelFilter":true,"brakeFeel":0.69999998807907,"filterEnabled":false,"brakeFeelExponent":2,"vibrationSource":2,"brakeFeelWithABS":true,"vibrationLevel":0.18000000715256,"autoGainOffset":0,"brakeFeelMakeupGain":false,"absFilterEnabled":true,"lockupFeel":0.80000001192093,"peakReduction":true}'
 
 -- Checking if a new version is available
 
@@ -640,6 +658,10 @@ local function drawGeneralForceSection(perCarTab)
         overridableItemWrapper(perCarTab, "downforceCompDynamicRange", function (textColor)
             showConfigSlider(configTable, "downforceCompDynamicRange", "Dynamic range cap", "%.2f", 0.0, 2.5, 1.0, getSliderWidth(sliderRightPadding), sectionPadding, false, textColor)
         end)
+        ui.pushStyleColor(ui.StyleColor.Text, controlAccentColor)
+        ui.offsetCursorX(sectionPadding)
+        ui.textWrapped((runtimeData.downforceDynamicRange < 0.0) and "Current car's dynamic range: N/A" or string.format("Current car's dynamic range: %.2f", runtimeData.downforceDynamicRange))
+        ui.popStyleColor(1)
     end
     -- if configTable.downforceCompMode ~= 0 then
     overridableItemWrapper(perCarTab, "downforceCompMakeupGain", function (textColor)
@@ -649,13 +671,13 @@ local function drawGeneralForceSection(perCarTab)
 
     showHeader("Brake feel:")
     overridableItemWrapper(perCarTab, "brakeFeel", function (textColor)
-        showConfigSlider(configTable, "brakeFeel", "Brake feel", "%.f%%", 0.0, 100.0, 100.0, getSliderWidth(sliderRightPadding), sectionPadding, false, textColor)
+        showConfigSlider(configTable, "brakeFeel", "Brake feel", "%.f%%", 0.0, 150.0, 100.0, getSliderWidth(sliderRightPadding), sectionPadding, false, textColor)
     end)
     overridableItemWrapper(perCarTab, "brakeFeelExponent", function (textColor)
         showConfigSlider(configTable, "brakeFeelExponent", "Brake feel exponent", "%.2f", 0.5, 2.5, 1.0, getSliderWidth(sliderRightPadding), sectionPadding, false, textColor)
     end)
     overridableItemWrapper(perCarTab, "brakeFeelWithABS", function (textColor)
-        showCheckbox(configTable, "brakeFeelWithABS", "Disable if ABS available", true, false, textColor)
+        showCheckbox(configTable, "brakeFeelWithABS", "Disable if ABS is available", true, false, textColor)
     end)
     overridableItemWrapper(perCarTab, "brakeFeelFilter", function (textColor)
         showCheckbox(configTable, "brakeFeelFilter", "Filter brake forces", false, false, textColor)
@@ -669,12 +691,15 @@ local function drawGeneralForceSection(perCarTab)
         showConfigSlider(configTable, "lockupFeel", "Lockup feedback", "%.f%%", 0.0, 100.0, 100.0, getSliderWidth(sliderRightPadding), sectionPadding, false, textColor)
     end)
     overridableItemWrapper(perCarTab, "lockupFeelWithABS", function (textColor)
-        showCheckbox(configTable, "lockupFeelWithABS", "Disable if ABS available", true, false, textColor)
+        showCheckbox(configTable, "lockupFeelWithABS", "Disable if ABS is available", true, false, textColor)
     end)
 
     showHeader("Self-aligning torque:")
     overridableItemWrapper(perCarTab, "extraSAT", function (textColor)
         showConfigSlider(configTable, "extraSAT", "Extra SAT", "%.f%%", 0.0, 300.0, 100.0, getSliderWidth(sliderRightPadding), sectionPadding, false, textColor)
+    end)
+    overridableItemWrapper(perCarTab, "extraSATSuspensionCompensation", function (textColor)
+        showCheckbox(configTable, "extraSATSuspensionCompensation", "Compensate for suspension geometry", false, false, textColor)
     end)
     overridableItemWrapper(perCarTab, "extraSATMakeupGain", function (textColor)
         showCheckbox(configTable, "extraSATMakeupGain", "Compensate FFB strength", false, false, textColor)
@@ -700,7 +725,7 @@ local function drawHapticsSection(perCarTab)
         configTable.vibrationSource = showCompactDropdown("Vibration source", "vibrationSource", {"Off", "Braking help", "Throttle help", "Braking + throttle help", "Understeer", "Gear shift warning"}, configTable["vibrationSource"] + 1, sectionPadding, textColor) - 1
     end)
     overridableItemWrapper(perCarTab, "vibrationLevel", function (textColor)
-        showConfigSlider(configTable, "vibrationLevel", "Vibration level", "%.f%%", 0.0, 100.0, 100.0, getSliderWidth(sliderRightPadding), sectionPadding, false, textColor)
+        showConfigSlider(configTable, "vibrationLevel", "Vibration level", "%.f%%", 0.0, 50.0, 100.0, getSliderWidth(sliderRightPadding), sectionPadding, false, textColor)
     end)
     overridableItemWrapper(perCarTab, "vibrationBaseFrequency", function (textColor)
         showConfigSlider(configTable, "vibrationBaseFrequency", "Base frequency", "%.f Hz", 10.0, 30.0, 1.0, getSliderWidth(sliderRightPadding), sectionPadding, false, textColor)
@@ -907,9 +932,6 @@ local function drawCompleteACSettingsPage()
     if currentFFBGainPerc > ffbGainSliderMax then
         ffbGainSliderMax = math.min(1000.0, math.ceil(currentFFBGainPerc / 50.0) * 50.0)
     end
-
-    ac.debug("ffbGainSliderMin", ffbGainSliderMin)
-    ac.debug("ffbGainSliderMax", ffbGainSliderMax)
 
     showDummyLine(0.5)
     showConfigSlider(dummyConfigTable, "ffbGain", "Car FFB gain", "%.f%%", ffbGainSliderMin, ffbGainSliderMax, 100.0, getSliderWidth(0), 0, getConfigValue("autoAdjustGain"))
@@ -1170,6 +1192,10 @@ local function drawCompleteFFBGraphToolWindow()
 
         if graphWindowBeingResized then
             unclampedWindowSize = unclampedWindowSize + ui.mouseDragDelta(ui.MouseButton.Left, 0)
+            local unclampedAvgSize = (unclampedWindowSize.x + unclampedWindowSize.y) * 0.5
+            local fixedAspectRatio = 2.0
+            unclampedWindowSize.x = unclampedAvgSize * (fixedAspectRatio / ((fixedAspectRatio + 1.0) * 0.5))
+            unclampedWindowSize.y = unclampedWindowSize.x * 0.5
             appConfig.graphWindowSize = vec2(math.clamp(unclampedWindowSize.x, graphWindowMinSize.x, graphWindowMaxSize.x), math.clamp(unclampedWindowSize.y, graphWindowMinSize.y, graphWindowMaxSize.y))
             ui.resetMouseDragDelta(ui.MouseButton.Left)
         else
@@ -1214,8 +1240,6 @@ local function drawCompleteGraphPage()
 end
 
 function script.windowMain(dt)
-    ac.debug("appConfig.graphWindowSize", appConfig.graphWindowSize)
-    ac.debug("appConfig.graphWindowPos", appConfig.graphWindowPos)
 
     if not runtimeData.appCanRun then
         if ac.getPatchVersionCode() < 3465 then
@@ -1325,13 +1349,12 @@ function script.windowMain(dt)
     end)
 
     if newVersionAvailable then
-        ac.debug("line height", ui.textLineHeight())
         showDummyLine(0.5)
         -- 📲
-        local updateClicked = showButton("          Update available! Click to download!", false, "releaseNotes", nil, nil, 0, rgbm(1.0, 0.9, 0.0, 1.0)) 
+        local updateClicked = showButton("          Update available! Click to download!", false, "releaseNotes", nil, nil, 0, rgbm(1.0, 0.9, 0.0, 1.0))
         ui.addIcon(ui.Icons.Download, ui.textLineHeight(), 0.5 - ui.textLineHeight() * 0.0245)
         if updateClicked then
-            os.execute("start https://www.overtake.gg/downloads/advanced-gamepad-assist.62485/")
+            os.execute("start https://www.overtake.gg/downloads/adams-ffb-toolbox.84691/")
         end
     end
 
