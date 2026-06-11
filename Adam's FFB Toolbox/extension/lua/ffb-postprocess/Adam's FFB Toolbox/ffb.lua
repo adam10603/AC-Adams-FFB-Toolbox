@@ -333,8 +333,7 @@ local function getVehicleData()
 
     storedVData.rAxleLocalVel          = storedRAxleLocalVel -- Local velocity of the rear axle (same as the average of the rear wheels)
 
-    -- storedVData.fAxleHVelLen           = mathSqrt(storedFAxleLocalVel.x * storedFAxleLocalVel.x + storedFAxleLocalVel.z * storedFAxleLocalVel.z)
-
+    storedVData.fAxleHVelLen           = mathSqrt(storedFAxleLocalVel.x * storedFAxleLocalVel.x + storedFAxleLocalVel.z * storedFAxleLocalVel.z)
     storedVData.cPhys                  = cPhys
     storedVData.perfData               = storedCarPerformanceData
     storedVData.shiftingTable          = storedShiftingTable
@@ -380,12 +379,13 @@ end
 
 local function calcProgressiveFeedback(inputValue, rangeStart, rangeEnd, startingFeedback)
     if inputValue < rangeStart then
-        return 0.0
+        return 0.0, 0.0
     end
 
     local initialFadeIn = mathSmoothstep(mathLerpInvSat(inputValue, rangeStart, mathLerp(rangeStart, rangeEnd, 0.1)))
     local progression = mathLerpInvSat(inputValue, rangeStart, rangeEnd)
-    return (progression ^ 2.0) * initialFadeIn * (1.0 - startingFeedback) + startingFeedback -- was 2.5
+    local fullRangeFeedback = (progression ^ 2.0) * initialFadeIn -- was 2.5
+    return fullRangeFeedback * (1.0 - startingFeedback) + startingFeedback, fullRangeFeedback
 end
 
 local function centeringForceMult(normalizedSlipAngle)
@@ -409,8 +409,8 @@ end
 
 local function getLowPassLimits(cornerFrequency)
     local relationship = 2.5
-    local corner = mathMin(160.0 / relationship, cornerFrequency)
-    local nyquist = mathMin(160.0, corner * relationship)
+    local corner = mathMin(166.0 / relationship, cornerFrequency)
+    local nyquist = mathMin(166.0, corner * relationship)
     return nyquist, corner
 end
 
@@ -481,6 +481,81 @@ ac.onSessionStart(function (sessionIndex, restarted)
 end)
 
 -- ============================ ffb processing
+
+---@param surfaceType ac.SurfaceExtendedType
+---@return number strengthMult, number velocityMult
+local function getRoadTextureSurfaceParams(surfaceType) -- just based on vibes tbh
+    if surfaceType == ac.SurfaceExtendedType.Base or surfaceType == ac.SurfaceExtendedType.Kerb or surfaceType == ac.SurfaceExtendedType.Old then
+        return 1.0, 1.0
+    end
+
+    if surfaceType == ac.SurfaceExtendedType.ExtraTurf then
+        return 0.5, 2.0
+    end
+
+    if surfaceType == ac.SurfaceExtendedType.Grass or surfaceType == ac.SurfaceExtendedType.Gravel or surfaceType == ac.SurfaceExtendedType.Sand then
+        return 2.0, 0.5
+    end
+
+    if surfaceType == ac.SurfaceExtendedType.Snow or surfaceType == ac.SurfaceExtendedType.Ice then
+        return 0.5, 1.0
+    end
+
+    return 1.0, 1.0
+end
+
+local roadTextureFilter1 = biquadFilter.new("HighPass", physicsUpdateRate, 55.0) -- high pass
+local roadTextureFilter2 = biquadFilter.new("LowPass", biquadFilter.calculateLowPassParameters(physicsUpdateRate, 100.0, 75.0)) -- low pass
+local prevFilteredNoise = 0.0
+local prevSurfaceTypeStrength = 1.0
+local function getRoadTextureNoise(fAxleHVelLen, frontAxleLoad, currentFrontAxleLoadEst, frontLsExpY, frontNdSlip, w0SurfaceType, w1SurfaceType)
+    if frontAxleLoad < 1e-6 then
+        return 0.0
+    end
+
+    local roadTextureV0 = 10.0 / 3.6
+    local roadTextureV1 = 300.0 / 3.6
+    local roadTextureV1OverV0 = roadTextureV1 / roadTextureV0
+    local roadTextureBandStartV1 = 55.0
+    local roadTextureBandStartV0 = roadTextureBandStartV1 / roadTextureV1OverV0
+    local roadTextureBandEndV1 = 75.0
+    local roadTextureBandEndV0 = roadTextureBandEndV1 / roadTextureV1OverV0
+    local roadTextureNyquistV1 = 100.0
+    local roadTextureNyquistV0 = roadTextureNyquistV1 / roadTextureV1OverV0
+
+    local w0SurfaceTypeStrength, w0SpeedMult = getRoadTextureSurfaceParams(w0SurfaceType)
+    local w1SurfaceTypeStrength, w1SpeedMult = getRoadTextureSurfaceParams(w1SurfaceType)
+    local surfaceTypeStrengthMult = mathLerp(prevSurfaceTypeStrength, (w0SurfaceTypeStrength + w1SurfaceTypeStrength) * 0.5, getExponentialDecayBlend(0.003, 0.05))
+    prevSurfaceTypeStrength = surfaceTypeStrengthMult
+    local surfaceTypeSpeedMult = (w0SpeedMult + w1SpeedMult) * 0.5 -- technically the two speeds should be used to generate 2 different noise patterns, but this will do
+
+    local velocityT = mathSmoothstep(mathLerpInvSat(fAxleHVelLen * surfaceTypeSpeedMult, roadTextureV0, roadTextureV1))
+    -- local velocityT = mathLerpInvSat(fAxleHVelLen, roadTextureV0, roadTextureV1)
+    local bandStart = mathLerp(roadTextureBandStartV0, roadTextureBandStartV1, velocityT)
+    local bandEnd = mathLerp(roadTextureBandEndV0, roadTextureBandEndV1, velocityT * 0.9 + 0.1) -- the modified T allows slightly more high frequencies at low speed
+    local nyquist = mathLerp(roadTextureNyquistV0, roadTextureNyquistV1, velocityT * 0.9 + 0.1)
+    -- local bandStart = libLogInterpolation(roadTextureBandStartV0, roadTextureBandStartV1, velocityT)
+    -- local bandEnd = libLogInterpolation(roadTextureBandEndV0, roadTextureBandEndV1, velocityT)
+    -- local nyquist = libLogInterpolation(roadTextureNyquistV0, roadTextureNyquistV1, velocityT)
+    nyquist = math.min(166.0, nyquist)
+    bandEnd = math.min(nyquist * 0.9, bandEnd)
+    roadTextureFilter1:updateParameters(physicsUpdateRate, bandStart)
+    roadTextureFilter2:updateParameters(biquadFilter.calculateLowPassParameters(physicsUpdateRate, nyquist, bandEnd))
+    local loadMult = (frontAxleLoad / currentFrontAxleLoadEst) ^ frontLsExpY
+    local velocityMult = mathSmoothstep(mathLerpInvSat(fAxleHVelLen, 0.1 * roadTextureV0, mathMin(roadTextureV0 * 1.0, roadTextureV1)))
+    local slipMult = mathAbs(2.0 * frontNdSlip / (frontNdSlip * frontNdSlip + 1.0))
+    if frontNdSlip < 1.0 then
+        slipMult = slipMult * 0.75 + 0.25
+    end
+
+    ac.debug("Hap | road texture surface type mult", surfaceTypeStrengthMult, 0.0, 1.0)
+
+    local input = math.random()
+    local filteredNoise = roadTextureFilter2:process(roadTextureFilter1:process(input)) * loadMult * velocityMult * slipMult * 6.0 -- correction factor for roughly 1.0 magnitude on average
+    filteredNoise = mathLerp(prevFilteredNoise, filteredNoise, getExponentialDecayBlend(0.003, 0.005)) -- this just very slightly takes the edge off at higher speeds
+    prevFilteredNoise = filteredNoise
+    return libClampEased(filteredNoise, -2.0, 2.0, 0.25) * surfaceTypeStrengthMult -- this is applied outside the clamp
+end
 
 local function onProcessingSkip(ffbValue, vehicle) -- clears any leftover state from all the effects when the overall processing is disabled
     ffbABSFiltered = ffbValue
@@ -869,6 +944,30 @@ local function processFFB(ffbValue, dt)
         lastCollisionProtectionBlend = 0.0
     end
 
+    -- road texture
+
+    local extraAdditivePostFilter = 0.0
+    local roadTextureSetting = getConfigValue("roadTexture")
+    if roadTextureSetting > 1e-6 then
+        local roadTextureNoise = getRoadTextureNoise(
+            vData.fAxleHVelLen,
+            vData.vehiclePR.wheels[0].load + vData.vehiclePR.wheels[1].load,
+            frontWheelLoadAtCurrentSpeed * 2.0,
+            vData.perfData.frontLsExpY,
+            vData.frontNdSlip,
+            vData.vehiclePR.wheels[0].surfaceExtendedType,
+            vData.vehiclePR.wheels[1].surfaceExtendedType
+        )
+        ac.debug("Hap | road texture", roadTextureNoise, -1.0, 1.0)
+        local roadTextureAdditive = ffbRefLevelVDynamic * roadTextureSetting * roadTextureNoise
+        if getConfigValue("roadTextureBypassFilter") then
+            extraAdditivePostFilter = roadTextureAdditive
+        else
+            finalFFB = finalFFB + roadTextureAdditive
+        end
+    end
+
+
     -- -- spike removal
 
     -- if true then
@@ -936,6 +1035,8 @@ local function processFFB(ffbValue, dt)
         filter:reset(finalFFB)
     end
 
+    finalFFB = finalFFB + extraAdditivePostFilter
+
     -- haptics, after the filter so the vibrations dont get killed by filtering
 
     local vibrationSource = getConfigValue("vibrationSource")
@@ -964,11 +1065,10 @@ local function processFFB(ffbValue, dt)
 
     prevEngagedGear = engagedGear
 
-    local sineVibrationExponent = 0.25
-
     if vibrationSource > 0 then
         local vibrationLevel = getConfigValue("vibrationLevel")
         local vibrationBaseFrequency = getConfigValue("vibrationBaseFrequency")
+        local sineVibrationExponent = mathMax(1e-6, (1.0 - getConfigValue("vibrationSharpness")) ^ 2.0)
 
         if vibrationSource == 5 then
 
@@ -995,9 +1095,11 @@ local function processFFB(ffbValue, dt)
         else
 
             local feedbackValue = 0.0
-            local feedbackRampBegin = 0.4
+            local feedbackFullRange = 0.0
+            local feedbackRampBegin = 0.5
             local feedbackRampEnd = 1.0
-            local feedbackBaseline = 0.35
+            local feedbackBrakeInputOffset = 0.1 -- used for an earlier or later warning than normal. positive is earlier
+            local feedbackBaseline = 0.3
             local frequencyRampEnd = 2.0
 
             local function getNdSlipRatioTarget(ndSlipAngleAbs, ndTarget)
@@ -1030,9 +1132,11 @@ local function processFFB(ffbValue, dt)
 
             local function getBrakeHelpFeedback() -- only considers front wheels for now
                 if vData.vehiclePR.brake > 0.01 and vData.vehicle.absMode < 1 then
-                    return slipRatioFeedbackImpl(-vData.frontSlipRatio * mathSign(vData.localVel.z), frontPeakSlipRatio, frontNdSlipAngleAbs)
+                    local baseValue = -vData.frontSlipRatio * mathSign(vData.localVel.z)
+                    baseValue = baseValue + feedbackBrakeInputOffset * frontPeakSlipRatio
+                    return slipRatioFeedbackImpl(baseValue, frontPeakSlipRatio, frontNdSlipAngleAbs)
                 end
-                return 0.0
+                return 0.0, 0.0
             end
 
             local function getThrottleHelpFeedback()
@@ -1041,29 +1145,29 @@ local function processFFB(ffbValue, dt)
                     return slipRatioFeedbackImpl(drivenAxleSlipRatio * mathSign(engagedGear), drivenAxlePeakSlipRatio, drivenAxleNdSlipAngleAbs)
                 end
 
-                return 0.0
+                return 0.0, 0.0
             end
 
             if vibrationSource == 1 then
                 -- braking help
-                feedbackValue = getBrakeHelpFeedback()
+                feedbackValue, feedbackFullRange = getBrakeHelpFeedback()
             elseif vibrationSource == 2 then
                 -- throttle help
-                feedbackValue = getThrottleHelpFeedback()
+                feedbackValue, feedbackFullRange = getThrottleHelpFeedback()
             elseif vibrationSource == 3 then
                 -- braking + throttle help
                 if drivenAxleSlipRatio * mathSign(engagedGear) < 0.0 then
-                    feedbackValue = getBrakeHelpFeedback()
+                    feedbackValue, feedbackFullRange = getBrakeHelpFeedback()
                 else
-                    feedbackValue = getThrottleHelpFeedback()
+                    feedbackValue, feedbackFullRange = getThrottleHelpFeedback()
                 end
             elseif vibrationSource == 4 then
                 -- understeer
                 -- feedbackValue = mathSmoothstep(mathLerpInvSat(mathAbs(vData.frontSlipDeg) / frontPeakSlipAngle, 0.9, 1.4))
-                feedbackValue = calcProgressiveFeedback(mathAbs(vData.frontSlipDeg), frontPeakSlipAngle * 0.95, frontPeakSlipAngle * 1.5, feedbackBaseline)
+                feedbackValue, feedbackFullRange = calcProgressiveFeedback(mathAbs(vData.frontSlipDeg), frontPeakSlipAngle * 0.95, frontPeakSlipAngle * 1.5, feedbackBaseline)
             end
 
-            local vibrationFrequency = libLogInterpolation(vibrationBaseFrequency, vibrationBaseFrequency * frequencyRampEnd, (feedbackValue - feedbackBaseline) / (1.0 - feedbackBaseline))
+            local vibrationFrequency = libLogInterpolation(vibrationBaseFrequency, vibrationBaseFrequency * frequencyRampEnd, feedbackFullRange)
             local finalFeedback = vibrationFeedbackSmoother:getWithRate(feedbackValue, dt, vibrationFrequency * 1.5)
 
             ac.debug("Hap | vibration feedback raw", feedbackValue, 0.0, 1.0)
@@ -1071,7 +1175,7 @@ local function processFFB(ffbValue, dt)
 
             if feedbackValue > 0.01 then
                 vibrationPhase = (vibrationPhase + vibrationFrequency * dt) % 1.0
-                local vibrationAdditive = sineGenerator(vibrationPhase, sineVibrationExponent, true) * (ffbRefLevelVRef * dfMultAtRefSpeed) * feedbackValue * 1.5 * vibrationLevel
+                local vibrationAdditive = sineGenerator(vibrationPhase, sineVibrationExponent, true) * (ffbRefLevelVRef * dfMultAtRefSpeed) * feedbackValue * 1.5 * vibrationLevel -- the 1.5 is because feedbackValue can be <1 so it compensates for the average strength
                 finalFFB = finalFFB + vibrationAdditive * lowSpeedFade
             else
                 vibrationPhase = 0.0
@@ -1133,6 +1237,9 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
 
             return ffbValue, ffbDamper
         end
+
+        finalFFB = libNumberGuard(finalFFB, ffbValue)
+
         -- finalFFB = processFFB(ffbValue, dt)
     else
         onProcessingSkip(ffbValue, vehicle)
