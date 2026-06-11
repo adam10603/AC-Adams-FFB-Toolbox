@@ -40,6 +40,7 @@ local mathSign = math.sign
 local mathClamp = math.clamp
 local mathExp = math.exp
 local mathPi = math.pi
+local mathRandom = math.random
 local libZeroGuard = lib.zeroGuard
 local libNumberGuard = lib.numberGuard
 local libWeightedAverage = lib.weightedAverage
@@ -537,8 +538,8 @@ local function getRoadTextureNoise(fAxleHVelLen, frontAxleLoad, currentFrontAxle
     -- local bandStart = libLogInterpolation(roadTextureBandStartV0, roadTextureBandStartV1, velocityT)
     -- local bandEnd = libLogInterpolation(roadTextureBandEndV0, roadTextureBandEndV1, velocityT)
     -- local nyquist = libLogInterpolation(roadTextureNyquistV0, roadTextureNyquistV1, velocityT)
-    nyquist = math.min(166.0, nyquist)
-    bandEnd = math.min(nyquist * 0.9, bandEnd)
+    nyquist = mathMin(166.0, nyquist)
+    bandEnd = mathMin(nyquist * 0.9, bandEnd)
     roadTextureFilter1:updateParameters(physicsUpdateRate, bandStart)
     roadTextureFilter2:updateParameters(biquadFilter.calculateLowPassParameters(physicsUpdateRate, nyquist, bandEnd))
     local loadMult = (frontAxleLoad / currentFrontAxleLoadEst) ^ frontLsExpY
@@ -550,7 +551,7 @@ local function getRoadTextureNoise(fAxleHVelLen, frontAxleLoad, currentFrontAxle
 
     ac.debug("Hap | road texture surface type mult", surfaceTypeStrengthMult, 0.0, 1.0)
 
-    local input = math.random()
+    local input = mathRandom()
     local filteredNoise = roadTextureFilter2:process(roadTextureFilter1:process(input)) * loadMult * velocityMult * slipMult * 6.0 -- correction factor for roughly 1.0 magnitude on average
     filteredNoise = mathLerp(prevFilteredNoise, filteredNoise, getExponentialDecayBlend(0.003, 0.005)) -- this just very slightly takes the edge off at higher speeds
     prevFilteredNoise = filteredNoise
