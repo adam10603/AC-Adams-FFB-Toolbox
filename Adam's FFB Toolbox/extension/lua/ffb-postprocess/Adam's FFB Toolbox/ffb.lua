@@ -647,22 +647,18 @@ local function processFFB(ffbValue, dt)
 
     -- auto gain
 
-    local function processAutoGain()
-        local adjustAutoGain = getConfigValue("autoAdjustGain")
-        local autoGainOffset = getConfigValue("autoGainOffset")
-        local newMultiplier = 1.0 / ffbBaseStrengthVRef * (1.0 + autoGainOffset)
-        newMultiplier = libNumberGuard(mathRound(mathClamp(newMultiplier, 0.2, 5.0) * 100.0) / 100.0, vData.vehicle.ffbMultiplier)
-        runtimeData.autoGainLevel = mathRound(newMultiplier * 100.0)
+    local adjustAutoGain = getConfigValue("autoAdjustGain")
+    local autoGainOffset = getConfigValue("autoGainOffset")
+    local newGainMultiplier = 1.0 / ffbBaseStrengthVRef * (1.0 + autoGainOffset)
+    newGainMultiplier = libNumberGuard(mathRound(mathClamp(newGainMultiplier, 0.2, 5.0) * 100.0) / 100.0, vData.vehicle.ffbMultiplier)
+    runtimeData.autoGainLevel = mathRound(newGainMultiplier * 100.0)
 
-        if adjustAutoGain and (now - lastGainChangeAttempt) >= (1.0 / 20.0) then
-            lastGainChangeAttempt = now
-            if mathAbs(vData.vehicle.ffbMultiplier - newMultiplier) > 0.00099 then
-                ac.broadcastSharedEvent("AFFBT_setFFBMultiplier", newMultiplier)
-            end
+    if adjustAutoGain and (now - lastGainChangeAttempt) >= (1.0 / 15.0) then
+        lastGainChangeAttempt = now
+        if mathAbs(vData.vehicle.ffbMultiplier - newGainMultiplier) > 0.00099 then
+            ac.broadcastSharedEvent("AFFBT_setFFBMultiplier", newGainMultiplier)
         end
     end
-
-    processAutoGain()
 
     -- abs filter
 
@@ -768,22 +764,18 @@ local function processFFB(ffbValue, dt)
 
         runtimeData.downforceDynamicRange = mathMax(0.0, dfDynamicRange)
 
-        local function getCompensatedFFBMult()
-            local standstillLoadFactor = (frontWheelLoadAtRest / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
-            local currentLoadFactor = ((vData.perfData.fAxleDownforce * fDownforceMult + frontWheelLoadAtRest) / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
-            local ret = mathLerp(1.0 / (currentLoadFactor / standstillLoadFactor), 1.0, downforceEffect)
-            local midSpeedLoadFactor = (frontWheelLoadAt70PercentSpeed / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
-            local multAtVRef = mathLerp(1.0 / (midSpeedLoadFactor / standstillLoadFactor), 1.0, downforceEffect)
-            local makeupGain = 1.0
+        local standstillLoadFactor = (frontWheelLoadAtRest / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
+        local currentLoadFactor = ((vData.perfData.fAxleDownforce * fDownforceMult + frontWheelLoadAtRest) / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
+        local ret = mathLerp(1.0 / (currentLoadFactor / standstillLoadFactor), 1.0, downforceEffect)
+        local midSpeedLoadFactor = (frontWheelLoadAt70PercentSpeed / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
+        local multAtVRef = mathLerp(1.0 / (midSpeedLoadFactor / standstillLoadFactor), 1.0, downforceEffect)
+        local makeupGain = 1.0
 
-            if getConfigValue("downforceCompMakeupGain") then
-                makeupGain = 1.0 / multAtVRef --mathLerp(1.0 / (standstillLoadFactor / midSpeedLoadFactor), 1.0, downforceEffect)
-            end
-
-            return libNumberGuard(mathMin(1.0, ret) * makeupGain), libNumberGuard(mathMin(1.0, multAtVRef), 1.0)
+        if getConfigValue("downforceCompMakeupGain") then
+            makeupGain = 1.0 / multAtVRef --mathLerp(1.0 / (standstillLoadFactor / midSpeedLoadFactor), 1.0, downforceEffect)
         end
 
-        local ffbMult, ffbMultAtVRef = getCompensatedFFBMult()
+        local ffbMult, ffbMultAtVRef = libNumberGuard(mathMin(1.0, ret) * makeupGain), libNumberGuard(mathMin(1.0, multAtVRef), 1.0)
 
         finalFFB = finalFFB * ffbMult
         dfMultApplied = ffbMult
@@ -1229,9 +1221,7 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
 
     if getConfigValue("scriptEnabled") then
         local success = false
-        success, finalFFB = pcall(function ()
-            return processFFB(ffbValue, dt)
-        end)
+        success, finalFFB = pcall(processFFB, ffbValue, dt)
 
         if not success then
             ac.error("Something exploded. This should stop in a second or so, otherwise something is up.")

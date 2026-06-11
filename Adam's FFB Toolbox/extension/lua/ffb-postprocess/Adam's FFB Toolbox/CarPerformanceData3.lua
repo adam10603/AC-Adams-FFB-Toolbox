@@ -761,8 +761,9 @@ function M:updateDownforceTelemetry(vehiclePR, wheelbase, rearAxleZ, cPhys, dt)
             --     self.lastWingAngles[i] = cPhys.wings[i].angle
             -- end
 
-            if self.lastWingAngles[i] == nil or (vehiclePR.localVelocity:length() < 1.0 and math.abs(cPhys.wings[i].angle - self.lastWingAngles[i]) >= 0.9) then -- // FIXME this sometimes triggers for no reason when it shouldnt, but hard to fix because csp cannot fire events correctly, very fun
+            if self.lastWingAngles[i] == nil or (vehiclePR.localVelocity:length() < 1.0 and vehiclePR.gas < 1e-6 and vehiclePR.brake < 1e-6 and math.abs(cPhys.wings[i].angle - self.lastWingAngles[i]) >= 0.49) then -- this jank is here because csp cannot fire events correctly, very fun. also, brakes are technically 100% on the setup screen but this api only refelcts user input it seems so its fine
                 wingsChanged = true
+                -- ac.log("Wing " .. i .. " changed from " .. (self.lastWingAngles[i] or 0) .. " to " .. cPhys.wings[i].angle)
                 self.lastWingAngles[i] = cPhys.wings[i].angle
             end
 

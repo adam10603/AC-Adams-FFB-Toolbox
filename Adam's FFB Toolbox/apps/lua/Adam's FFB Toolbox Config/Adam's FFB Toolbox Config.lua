@@ -22,7 +22,7 @@ elseif badModuleDirExists and goodModuleDirExists then
 
     if anyCopyFailed then
         ac.error("Plugin cant be updated, blame Ilja")
-        ac.setMessage("Adam's FFB Toolbox", "ERROR: Failed to update plugin. Check the mod's page for solutions.", 'illegal', 10.0)
+        ac.setMessage("Adam's FFB Toolbox", "ERROR: Failed to update plugin. Check the F.A.Q. page for solutions.", 'illegal', 10.0)
     else
         -- io.deleteDir(badModulePath)
         ac.log("Plugin updated")
