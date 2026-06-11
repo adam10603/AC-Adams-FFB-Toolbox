@@ -2,26 +2,34 @@
 
 local badModulePath = ac.getFolder(ac.FolderID.ExtRoot) .. "\\ffb-postprocess\\Adam's FFB Toolbox"
 local goodModulePath = ac.getFolder(ac.FolderID.ExtLua) .. "\\ffb-postprocess\\Adam's FFB Toolbox"
-if io.dirExists(badModulePath) and not io.dirExists(goodModulePath) then
+local badModuleDirExists = io.dirExists(badModulePath)
+local goodModuleDirExists = io.dirExists(goodModulePath)
+if badModuleDirExists and not goodModuleDirExists then
     io.move(badModulePath, goodModulePath)
-elseif io.dirExists(badModulePath) and io.dirExists(goodModulePath) then
+elseif badModuleDirExists and goodModuleDirExists then
     local anyCopyFailed = false
     io.scanDir(badModulePath, nil, function (fileName, fileAttributes, callbackData)
-        if not fileAttributes.isDirectory then
-            if not io.copyFile(badModulePath .. "\\" .. fileName, goodModulePath .. "\\" .. fileName, false) then
+        local badFilePath = badModulePath .. "\\" .. fileName
+        local goodFilePath = goodModulePath .. "\\" .. fileName
+        if not fileAttributes.isDirectory and (fileAttributes.creationTime > io.getAttributes(goodFilePath).creationTime) then
+            if not io.move(badFilePath, goodFilePath, true) then
                 anyCopyFailed = true
             end
         end
     end)
 
+    io.deleteDir(badModulePath)
+
     if anyCopyFailed then
         ac.error("Plugin cant be updated, blame Ilja")
         ac.setMessage("Adam's FFB Toolbox", "ERROR: Failed to update plugin. Check the mod's page for solutions.", 'illegal', 10.0)
     else
-        io.deleteDir(badModulePath)
+        -- io.deleteDir(badModulePath)
         ac.log("Plugin updated")
     end
 end
+
+-- ... onto the rest of the script
 
 local updater = require("updater")
 -- local json = require("json")

@@ -1129,8 +1129,20 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
     ffbSampleCounter = ffbSampleCounter - 1
     if ffbSampleCounter <= 0 then
         ffbSampleCounter = storage.ffbSampleRateDiv
-        runtimeData.ffbRawHistoryHead, runtimeData.ffbRawHistoryCount = lib.StructValueHistory.push(runtimeData.ffbRawHistoryBuffer, storage.ffbHistoryBufferCapacity, runtimeData.ffbRawHistoryHead, runtimeData.ffbRawHistoryCount, ffbValue)
-        runtimeData.ffbFinalHistoryHead, runtimeData.ffbFinalHistoryCount = lib.StructValueHistory.push(runtimeData.ffbFinalHistoryBuffer, storage.ffbHistoryBufferCapacity, runtimeData.ffbFinalHistoryHead, runtimeData.ffbFinalHistoryCount, finalFFB)
+        runtimeData.ffbRawHistoryHead, runtimeData.ffbRawHistoryCount = lib.StructValueHistory.push(
+            runtimeData.ffbRawHistoryBuffer,
+            storage.ffbHistoryBufferCapacity,
+            runtimeData.ffbRawHistoryHead,
+            runtimeData.ffbRawHistoryCount,
+            ffbValue
+        )
+        runtimeData.ffbFinalHistoryHead, runtimeData.ffbFinalHistoryCount = lib.StructValueHistory.push(
+            runtimeData.ffbFinalHistoryBuffer,
+            storage.ffbHistoryBufferCapacity,
+            runtimeData.ffbFinalHistoryHead,
+            runtimeData.ffbFinalHistoryCount,
+            finalGuardedFFB
+        )
     end
 
     return finalGuardedFFB, ffbDamper -- what even is the damper in this context? its always 0 even with damping enabled in the ffb settings
