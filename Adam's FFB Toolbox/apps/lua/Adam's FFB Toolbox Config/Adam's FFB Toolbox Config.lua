@@ -2,26 +2,34 @@
 
 local badModulePath = ac.getFolder(ac.FolderID.ExtRoot) .. "\\ffb-postprocess\\Adam's FFB Toolbox"
 local goodModulePath = ac.getFolder(ac.FolderID.ExtLua) .. "\\ffb-postprocess\\Adam's FFB Toolbox"
-if io.dirExists(badModulePath) and not io.dirExists(goodModulePath) then
+local badModuleDirExists = io.dirExists(badModulePath)
+local goodModuleDirExists = io.dirExists(goodModulePath)
+if badModuleDirExists and not goodModuleDirExists then
     io.move(badModulePath, goodModulePath)
-elseif io.dirExists(badModulePath) and io.dirExists(goodModulePath) then
+elseif badModuleDirExists and goodModuleDirExists then
     local anyCopyFailed = false
     io.scanDir(badModulePath, nil, function (fileName, fileAttributes, callbackData)
-        if not fileAttributes.isDirectory then
-            if not io.copyFile(badModulePath .. "\\" .. fileName, goodModulePath .. "\\" .. fileName, false) then
+        local badFilePath = badModulePath .. "\\" .. fileName
+        local goodFilePath = goodModulePath .. "\\" .. fileName
+        if not fileAttributes.isDirectory and (fileAttributes.creationTime > io.getAttributes(goodFilePath).creationTime) then
+            if not io.move(badFilePath, goodFilePath, true) then
                 anyCopyFailed = true
             end
         end
     end)
 
+    io.deleteDir(badModulePath)
+
     if anyCopyFailed then
         ac.error("Plugin cant be updated, blame Ilja")
-        ac.setMessage("Adam's FFB Toolbox", "ERROR: Failed to update plugin. Check the mod's page for solutions.", 'illegal', 10.0)
+        ac.setMessage("Adam's FFB Toolbox", "ERROR: Failed to update plugin. Check the F.A.Q. page for solutions.", 'illegal', 10.0)
     else
-        io.deleteDir(badModulePath)
+        -- io.deleteDir(badModulePath)
         ac.log("Plugin updated")
     end
 end
+
+-- ... onto the rest of the script
 
 local updater = require("updater")
 -- local json = require("json")
@@ -58,8 +66,14 @@ local appConfig = ac.storage(table.clone(defaultAppConfig, "full"), "AFFBT_APP_"
 
 -- appConfig.graphWindowSize = graphWindowDefaultSize
 
+local cachedOverrideKeys = {} -- avoids string concatenations all the time
 local function getConfigValue(key) -- includes car overrides
-    if carSpecificConfig["OVERRIDE_" .. key] == true then
+    local overrideKey = cachedOverrideKeys[key]
+    if not overrideKey then
+        overrideKey = "OVERRIDE_" .. key
+        cachedOverrideKeys[key] = overrideKey
+    end
+    if carSpecificConfig[overrideKey] == true then
         return carSpecificConfig[key]
     end
 
@@ -198,9 +212,12 @@ local tooltips = {
     oversteerFeel = "Makes your wheel pull stronger in the countersteer direction when the car slides / oversteers.",
     oversteerFeelAggression = "Determines how large a slide has to be for the oversteer effect to kick in.\n\nLower = the effect already engages in a shallow slide.\n\nHigher = a bigger slide is needed to trigger the effect.",
     oversteerFeelMakeupGain = "If you add extra oversteer force, this setting will compensate by decreasing the overall FFB level accordingly.",
-    vibrationSource = "Selects what triggers the vibration effect.\n\nBraking help = progressive vibration during braking when there's no ABS. Starts lighter then gets stronger as you approach the point of locking up.\n\nThrottle help = progressive vibration during acceleration when there's no TCS. Starts lighter then gets stronger as you approach the point of wheelspin.\n\nBraking + throttle help = both of the above, depending on whether you're braking or accelerating.\n\nUndersteer = progressive vibration to warn if you're steering too much. This one starts right around the grip limit and gets stronger the more you push into understeer.\n\nGear shift warning = vibration to signal the need to shift up. This is based on shifting points calculated from the engine's power curve and the gear ratios of the car, or if these can't be calculated then the car's default shifting point is used. The vibration warning is timed in a way that accounts for reaction time, so you'll shift at the correct point by just reacting to it without having to anticipate it.\n\nFor best results AC's own slip effect should be turned off to avoid it conflicting with this vibration effect.",
+    vibrationSource = "Selects what triggers the vibration effect.\n\nBraking help = progressive vibration during braking when there's no ABS. Starts lighter then gets stronger as you approach the point of locking up.\n\nThrottle help = progressive vibration during acceleration when there's no TCS. Starts lighter then gets stronger as you approach the point of wheelspin.\n\nBraking + throttle help = both of the above, depending on whether you're braking or accelerating.\n\nUndersteer = progressive vibration to warn if you're steering too much. This one starts right around the grip limit and gets stronger the more you push into understeer.\n\nGear shift warning = vibration to signal the need to shift up. This is calculated from the engine's power curve and gear ratios, or if those are unavailable then the car's default shifting point is used. The vibration warning is timed in a way that accounts for reaction time, so you'll shift at the correct point by just reacting to it without having to anticipate it.\n\nFor best results AC's own slip effect should be turned off to avoid it conflicting with this vibration effect.",
     vibrationLevel = "The strength of the vibration effect.",
     vibrationBaseFrequency = "The frequency of the vibration effect.\n\nThe actual frequency of the vibration output might be modulated further depending on the vibration source, but this setting is always used as the baseline.",
+    vibrationSharpness = "Changes the texture / feel of the vibration.\n\n0% = pure sine wave, the smoothest feel.\n\n100% = square wave, feels much sharper.",
+    roadTexture = "Adds the feeling of road texture to the FFB. This can add some immersion on smooth tracks.\n\nThe effect changes dynamically with speed, tire load, tire slip and surface type.",
+    roadTextureBypassFilter = "When enabled, it allows the road texture effect to bypass the general filter.\n\nThis means that even when you use the general FFB filter setting, the road texture setting will remain feeling sharp.\n\nWhen disabled, the general filter will smooth out the added road texture effect too.",
     peakReduction = "Temporarily filters out sudden peaks from the FFB when a collision is detected.\n\nThis helps to avoid unpleasant or dangerous jolts in your wheel when hitting a wall or another car.",
     ffbLevelAfterFinish = "When you finish a race and get the checkered flag, your FFB strength will be reduced to this level. Upon returning to the pits your FFB will be restored to normal.\n\nThis is for preventing your wheel from going crazy if another car decides to hit you after the race ends, as they sometimes do.\n\n100% = no change.\n\nUnder 100% = reduced FFB post-race (until pitting).",
     fixExtraSettings = "", -- added dynamically in code
@@ -216,7 +233,7 @@ local tooltips = {
 tooltips["controls.ini:STEER:FF_GAIN"] = "Your global FFB level that isn't specific to the car."
 tooltips["controls.ini:FF_ENHANCEMENT:CURBS"] = "Adds a vibration effect to curbs that don't have 3D bumps.\n\nAround 40% makes the strength of this match the feel of 3D curbs, which makes curbs feel more consistent.\n\nHowever, this also gets applied on surfaces such as cobblestone, so vintage road courses for example could feel more bumpy than they really are when using this."
 tooltips["controls.ini:FF_ENHANCEMENT:ABS"] = "Adds additional vibration when the ABS is active.\n\nHowever, since the ABS in AC produces very crude brake pressure pulses, it can already be felt very clearly in the FFB without needing any extra vibrations."
-tooltips["controls.ini:FF_ENHANCEMENT:ROAD"] = "Adds a randomized vibration to the FFB at all times.\n\nIn theory this is there to make flat surfaces feel less boring, but in practice it just adds a very high frequency noise that I don't recommend using."
+tooltips["controls.ini:FF_ENHANCEMENT:ROAD"] = "Adds a randomized vibration to the FFB at all times.\n\nIn theory this is there to make flat surfaces feel less boring, but in practice it just adds a very high frequency noise that I don't recommend using.\n\nTry using the \"road texture effect\" setting as an alternative."
 tooltips["controls.ini:FF_ENHANCEMENT:SLIPS"] = "Adds a vibration effect when the tires go over the grip limit.\n\nThis can generally be useful, however, this plugin provides better alternatives under the haptics section.\n\nKeep this at 0% if you intend to use the haptics from this plugin instead."
 tooltips["controls.ini:FF_TWEAKS:CENTER_BOOST_RANGE"] = "This has to do with increasing the FFB when the wheel is centered, but I wouldn't recommend using it."
 tooltips["controls.ini:FF_TWEAKS:CENTER_BOOST_GAIN"] = "This has to do with increasing the FFB when the wheel is centered, but I wouldn't recommend using it."
@@ -720,7 +737,7 @@ end
 local function drawHapticsSection(perCarTab)
     local configTable = perCarTab and carSpecificConfig or generalConfig
 
-    showHeader("Vibration:")
+    showHeader("Vibration feedback:")
     overridableItemWrapper(perCarTab, "vibrationSource", function (textColor)
         configTable.vibrationSource = showCompactDropdown("Vibration source", "vibrationSource", {"Off", "Braking help", "Throttle help", "Braking + throttle help", "Understeer", "Gear shift warning"}, configTable["vibrationSource"] + 1, sectionPadding, textColor) - 1
     end)
@@ -729,6 +746,17 @@ local function drawHapticsSection(perCarTab)
     end)
     overridableItemWrapper(perCarTab, "vibrationBaseFrequency", function (textColor)
         showConfigSlider(configTable, "vibrationBaseFrequency", "Base frequency", "%.f Hz", 10.0, 30.0, 1.0, getSliderWidth(sliderRightPadding), sectionPadding, false, textColor)
+    end)
+    overridableItemWrapper(perCarTab, "vibrationSharpness", function (textColor)
+        showConfigSlider(configTable, "vibrationSharpness", "Signal sharpness", "%.f%%", 0.0, 100.0, 100.0, getSliderWidth(sliderRightPadding), sectionPadding, false, textColor)
+    end)
+
+    showHeader("Road texture:")
+    overridableItemWrapper(perCarTab, "roadTexture", function (textColor)
+        showConfigSlider(configTable, "roadTexture", "Road texture effect", "%.1f%%", 0.0, 25.0, 100.0, getSliderWidth(sliderRightPadding), sectionPadding, false, textColor)
+    end)
+    overridableItemWrapper(perCarTab, "roadTextureBypassFilter", function (textColor)
+        showCheckbox(configTable, "roadTextureBypassFilter", "Bypass filter", false, false, textColor)
     end)
 end
 
@@ -1247,6 +1275,7 @@ function script.windowMain(dt)
             ui.textWrapped("Update CSP to 0.2.11 or newer!\nOlder versions are not supported.")
             ui.popStyleColor(1)
         else
+            showDummyLine()
             ui.textWrapped("The FFB post-processing script is not enabled.")
             local currentClock = os.clock()
             if (currentClock - enableClicked) >= 3.0 then
@@ -1254,7 +1283,11 @@ function script.windowMain(dt)
                 showButton("Enable", false, nil, enableScript)
             end
             showDummyLine()
-            ui.textWrapped("If you can't enable it from here then something isn't working right. Try restarting the game, or double checking the instructions and re-installing the mod.")
+            ui.textWrapped("If you can't enable it from here then something isn't working. Try reading the F.A.Q. page for more info:")
+            showDummyLine()
+            if showButton("Open F.A.Q. page", false, nil) then
+                os.execute("start https://github.com/adam10603/AC-Adams-FFB-Toolbox/blob/release/FAQ.md")
+            end
         end
 
         return
@@ -1265,7 +1298,7 @@ function script.windowMain(dt)
     runtimeData.appHeartbeatClock = os.clock()
 
     if not appConfig.firstInstallPassed then
-        local message = "This seems to be your first time using this plugin.\n\nFor the best experience it is recommended to use certain values for AC's built-in FFB settings.\n\nThe recommended FFB settings are the following:\n"
+        local message = "This seems to be your first time using this plugin.\n\nFor the best experience it's recommended to use certain values for AC's built-in FFB settings.\n\nThe recommended FFB settings are:\n"
 
         for k, v in pairs(gameConfigSuggestions) do
             if gameConfigSuggestionsConsidered[k] then
@@ -1273,7 +1306,7 @@ function script.windowMain(dt)
             end
         end
 
-        message = message .. "\n\nYou can also change these any time from this app!\n\nClick this button to apply the settins mentioned above (other settings like gain won't be affected):"
+        message = message .. "\n\nYou can also change these any time from this app!\n\nClick this button to apply the settings above (others like gain won't be affected):"
 
         showDummyLine(0.5)
         ui.textWrapped(message)

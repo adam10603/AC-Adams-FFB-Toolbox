@@ -19,6 +19,39 @@ local carPerformanceData = require("CarPerformanceData3")
 ---@diagnostic disable-next-line: different-requires
 local lib = require("AGALib2")
 
+
+-- These should speed things up a little
+local mathDeg = math.deg
+local mathRad = math.rad
+local mathSmoothstep = math.smoothstep
+local mathSmootherstep = math.smootherstep
+local mathLerpInvSat = math.lerpInvSat
+local mathLerp = math.lerp
+local mathMax = math.max
+local mathMin = math.min
+local mathRound = math.round
+local mathAbs = math.abs
+local mathSqrt = math.sqrt
+local mathPow = math.pow
+local mathSin = math.sin
+local mathCos = math.cos
+local mathAtan2 = math.atan2
+local mathSign = math.sign
+local mathClamp = math.clamp
+local mathExp = math.exp
+local mathPi = math.pi
+local mathRandom = math.random
+local libZeroGuard = lib.zeroGuard
+local libNumberGuard = lib.numberGuard
+local libWeightedAverage = lib.weightedAverage
+local libGetPointVelocity = lib.getPointVelocity
+local libStructValueHistory = lib.StructValueHistory
+local libSignedPow = lib.signedPow
+local libClampEased = lib.clampEased
+local libClamp01 = lib.clamp01
+local libInverseLerp = lib.inverseLerp
+local libLogInterpolation = lib.logInterpolation
+
 local playerCarID = ac.getCarID(0) or "nil"
 
 local function getGeneralConfigPath()
@@ -90,8 +123,8 @@ ac.onRelease(function ()
     runtimeData.appCanRun = false
 end)
 
-storage.ffbHistoryBufferCapacity, runtimeData.ffbRawHistoryHead, runtimeData.ffbRawHistoryCount = lib.StructValueHistory.new(storage.ffbHistoryBufferCapacity)
-storage.ffbHistoryBufferCapacity, runtimeData.ffbFinalHistoryHead, runtimeData.ffbFinalHistoryCount = lib.StructValueHistory.new(storage.ffbHistoryBufferCapacity)
+storage.ffbHistoryBufferCapacity, runtimeData.ffbRawHistoryHead, runtimeData.ffbRawHistoryCount = libStructValueHistory.new(storage.ffbHistoryBufferCapacity)
+storage.ffbHistoryBufferCapacity, runtimeData.ffbFinalHistoryHead, runtimeData.ffbFinalHistoryCount = libStructValueHistory.new(storage.ffbHistoryBufferCapacity)
 
 local ffbSampleCounter = storage.ffbSampleRateDiv
 
@@ -100,8 +133,14 @@ for i = 0, storage.ffbHistoryBufferCapacity - 1, 1 do
     runtimeData.ffbFinalHistoryBuffer[i] = 0.0
 end
 
+local cachedOverrideKeys = {} -- avoids string concatenations all the time
 local function getConfigValue(key) -- includes car overrides
-    if carSpecificConfig["OVERRIDE_" .. key] == true then
+    local overrideKey = cachedOverrideKeys[key]
+    if not overrideKey then
+        overrideKey = "OVERRIDE_" .. key
+        cachedOverrideKeys[key] = overrideKey
+    end
+    if carSpecificConfig[overrideKey] == true then
         return carSpecificConfig[key]
     end
 
@@ -167,65 +206,65 @@ local function getVehicleData()
         fAxlePos:set(localWheelPositions[0]):add(localWheelPositions[1]):scale(0.5)
         rAxlePos:set(localWheelPositions[2]):add(localWheelPositions[3]):scale(0.5)
         avgWheelPos:set(localWheelPositions[0]):add(localWheelPositions[1]):add(localWheelPositions[2]):add(localWheelPositions[3]):scale(0.25)
-        avgWheelPos.x = math.round(avgWheelPos.x * 1000.0) / 1000.0
-        avgWheelPos.y = math.round(avgWheelPos.y * 1000.0) / 1000.0
-        avgWheelPos.z = math.round(avgWheelPos.z * 1000.0) / 1000.0
+        avgWheelPos.x = mathRound(avgWheelPos.x * 1000.0) / 1000.0
+        avgWheelPos.y = mathRound(avgWheelPos.y * 1000.0) / 1000.0
+        avgWheelPos.z = mathRound(avgWheelPos.z * 1000.0) / 1000.0
         savedWheelPositions = true
     end
 
-    -- local fWheelWeights   = {lib.zeroGuard(vehicle.wheels[0].load), lib.zeroGuard(vehicle.wheels[1].load)}
-    -- local rWheelWeights   = {lib.zeroGuard(vehicle.wheels[2].load), lib.zeroGuard(vehicle.wheels[3].load)}
+    -- local fWheelWeights   = {libZeroGuard(vehicle.wheels[0].load), libZeroGuard(vehicle.wheels[1].load)}
+    -- local rWheelWeights   = {libZeroGuard(vehicle.wheels[2].load), libZeroGuard(vehicle.wheels[3].load)}
     -- local allWheelWeights = {fWheelWeights[1], fWheelWeights[2], rWheelWeights[1], rWheelWeights[2]}
-    storedFWheelWeights[1] = lib.zeroGuard(vehiclePR.wheels[0].load)
-    storedFWheelWeights[2] = lib.zeroGuard(vehiclePR.wheels[1].load)
-    storedRWheelWeights[1] = lib.zeroGuard(vehiclePR.wheels[2].load)
-    storedRWheelWeights[2] = lib.zeroGuard(vehiclePR.wheels[3].load)
-    storedAllWheelWeights[1] = storedFWheelWeights[1]
-    storedAllWheelWeights[2] = storedFWheelWeights[2]
-    storedAllWheelWeights[3] = storedRWheelWeights[1]
-    storedAllWheelWeights[4] = storedRWheelWeights[2]
+    storedFWheelWeights[1] = libZeroGuard(vehiclePR.wheels[0].load)
+    storedFWheelWeights[2] = libZeroGuard(vehiclePR.wheels[1].load)
+    storedRWheelWeights[1] = libZeroGuard(vehiclePR.wheels[2].load)
+    storedRWheelWeights[2] = libZeroGuard(vehiclePR.wheels[3].load)
+    -- storedAllWheelWeights[1] = storedFWheelWeights[1]
+    -- storedAllWheelWeights[2] = storedFWheelWeights[2]
+    -- storedAllWheelWeights[3] = storedRWheelWeights[1]
+    -- storedAllWheelWeights[4] = storedRWheelWeights[2]
 
-    tmpTable2[1]            = math.deg(vehiclePR.wheels[0].slipAngle)
-    tmpTable2[2]            = math.deg(vehiclePR.wheels[1].slipAngle)
-    local frontSlipDeg      = lib.numberGuard(lib.weightedAverage(tmpTable2, storedFWheelWeights))
-    tmpTable2[1]            = math.deg(vehiclePR.wheels[2].slipAngle)
-    tmpTable2[2]            = math.deg(vehiclePR.wheels[3].slipAngle)
-    local rearSlipDeg       = lib.numberGuard(lib.weightedAverage(tmpTable2, storedRWheelWeights))
+    tmpTable2[1]            = mathDeg(vehiclePR.wheels[0].slipAngle)
+    tmpTable2[2]            = mathDeg(vehiclePR.wheels[1].slipAngle)
+    local frontSlipDeg      = libNumberGuard(libWeightedAverage(tmpTable2, storedFWheelWeights))
+    tmpTable2[1]            = mathDeg(vehiclePR.wheels[2].slipAngle)
+    tmpTable2[2]            = mathDeg(vehiclePR.wheels[3].slipAngle)
+    local rearSlipDeg       = libNumberGuard(libWeightedAverage(tmpTable2, storedRWheelWeights))
     tmpTable2[1]            = vehiclePR.wheels[0].slipRatio
     tmpTable2[2]            = vehiclePR.wheels[1].slipRatio
-    local frontSlipRatio    = lib.numberGuard(lib.weightedAverage(tmpTable2, storedFWheelWeights))
+    local frontSlipRatio    = libNumberGuard(libWeightedAverage(tmpTable2, storedFWheelWeights))
     tmpTable2[1]            = vehiclePR.wheels[2].slipRatio
     tmpTable2[2]            = vehiclePR.wheels[3].slipRatio
-    local rearSlipRatio     = lib.numberGuard(lib.weightedAverage(tmpTable2, storedRWheelWeights))
+    local rearSlipRatio     = libNumberGuard(libWeightedAverage(tmpTable2, storedRWheelWeights))
     tmpTable2[1]            = vehiclePR.wheels[0].ndSlip
     tmpTable2[2]            = vehiclePR.wheels[1].ndSlip
-    local frontNdSlip       = lib.numberGuard(lib.weightedAverage(tmpTable2, storedFWheelWeights))
+    local frontNdSlip       = libNumberGuard(libWeightedAverage(tmpTable2, storedFWheelWeights))
     tmpTable2[1]            = vehiclePR.wheels[2].ndSlip
     tmpTable2[2]            = vehiclePR.wheels[3].ndSlip
-    local rearNdSlip        = lib.numberGuard(lib.weightedAverage(tmpTable2, storedRWheelWeights))
-    tmpTable4[1]            = vehiclePR.wheels[0].ndSlip
-    tmpTable4[2]            = vehiclePR.wheels[1].ndSlip
-    tmpTable4[3]            = vehiclePR.wheels[2].ndSlip
-    tmpTable4[4]            = vehiclePR.wheels[3].ndSlip
-    local totalNdSlip       = lib.numberGuard(lib.weightedAverage(tmpTable4, storedAllWheelWeights))
-    tmpTable42[1]           = storedAllWheelWeights[1] * vehiclePR.wheels[0].ndSlip
-    tmpTable42[2]           = storedAllWheelWeights[2] * vehiclePR.wheels[1].ndSlip
-    tmpTable42[3]           = storedAllWheelWeights[3] * vehiclePR.wheels[2].ndSlip
-    tmpTable42[4]           = storedAllWheelWeights[4] * vehiclePR.wheels[3].ndSlip
-    local totalNdSlipBiased = lib.numberGuard(lib.weightedAverage(tmpTable4, tmpTable42))
+    local rearNdSlip        = libNumberGuard(libWeightedAverage(tmpTable2, storedRWheelWeights))
+    -- tmpTable4[1]            = vehiclePR.wheels[0].ndSlip
+    -- tmpTable4[2]            = vehiclePR.wheels[1].ndSlip
+    -- tmpTable4[3]            = vehiclePR.wheels[2].ndSlip
+    -- tmpTable4[4]            = vehiclePR.wheels[3].ndSlip
+    -- local totalNdSlip       = libNumberGuard(libWeightedAverage(tmpTable4, storedAllWheelWeights))
+    -- tmpTable42[1]           = storedAllWheelWeights[1] * vehiclePR.wheels[0].ndSlip
+    -- tmpTable42[2]           = storedAllWheelWeights[2] * vehiclePR.wheels[1].ndSlip
+    -- tmpTable42[3]           = storedAllWheelWeights[3] * vehiclePR.wheels[2].ndSlip
+    -- tmpTable42[4]           = storedAllWheelWeights[4] * vehiclePR.wheels[3].ndSlip
+    -- local totalNdSlipBiased = libNumberGuard(libWeightedAverage(tmpTable4, tmpTable42))
 
-    local wheelbase = math.abs(fAxlePos.z - rAxlePos.z)
-    -- local trackWidth      = math.max(math.abs(localWheelPositions[0].x - localWheelPositions[1].x), math.abs(localWheelPositions[2].x - localWheelPositions[3].x))
+    local wheelbase = mathAbs(fAxlePos.z - rAxlePos.z)
+    -- local trackWidth      = mathMax(mathAbs(localWheelPositions[0].x - localWheelPositions[1].x), mathAbs(localWheelPositions[2].x - localWheelPositions[3].x))
 
     -- Updating local wheel velocities
     for i = 0, 3 do
-        lib.getPointVelocity(localWheelPositions[i], vehiclePR.localAngularVelocity, vehiclePR.localVelocity, storedLocalWheelVel[i])
+        libGetPointVelocity(localWheelPositions[i], vehiclePR.localAngularVelocity, vehiclePR.localVelocity, storedLocalWheelVel[i])
     end
 
     -- lib.weightedVecAverage({storedLocalWheelVel[0], storedLocalWheelVel[1]}, fWheelWeights, storedWeightedFLocalVel)
-    lib.getPointVelocity(fAxlePos, vehiclePR.localAngularVelocity, vehiclePR.localVelocity, storedFAxleLocalVel)
-    lib.getPointVelocity(rAxlePos, vehiclePR.localAngularVelocity, vehiclePR.localVelocity, storedRAxleLocalVel)
-    lib.getPointVelocity(avgWheelPos, vehiclePR.localAngularVelocity, vehiclePR.localVelocity, storedMiddleVel)
+    libGetPointVelocity(fAxlePos, vehiclePR.localAngularVelocity, vehiclePR.localVelocity, storedFAxleLocalVel)
+    libGetPointVelocity(rAxlePos, vehiclePR.localAngularVelocity, vehiclePR.localVelocity, storedRAxleLocalVel)
+    libGetPointVelocity(avgWheelPos, vehiclePR.localAngularVelocity, vehiclePR.localVelocity, storedMiddleVel)
 
     local vehicleGR = ac.getCar(0) or car
     local cPhys = ac.getCarPhysics(0)
@@ -260,32 +299,42 @@ local function getVehicleData()
         end
     end
 
-    -- storedVData.inputData             = inputData
+    -- things that arent being used are commented out to save some computation, but they can be uncommented if needed
+
     storedVData.vehiclePR              = vehiclePR
     storedVData.vehicle                = vehicleGR
     storedVData.wheelbase              = wheelbase
-    storedVData.wheelbaseFactor        = wheelbase / 2.5
+
+    -- storedVData.wheelbaseFactor        = wheelbase / 2.5
+
     storedVData.inverseBodyTransformPR = inverseBodyTransformPR -- Used for converting points or vectors from global space to local space
     storedVData.inverseBodyTransformGR = inverseBodyTransformGR
     storedVData.localVel               = storedMiddleVel -- Local velocity vector of the vehicle at the average position of all 4 wheels
-    storedVData.localHVelLen           = math.sqrt(storedMiddleVel.x * storedMiddleVel.x + storedMiddleVel.z * storedMiddleVel.z) -- Velocity magnitude of the vehicle on the local horizontal plane (m/s)
-    storedVData.localAngularVel        = vehiclePR.localAngularVelocity
-    storedVData.localWheelVelocities   = storedLocalWheelVel -- Wheel velocities in local space, 0-based indexing
+    storedVData.localHVelLen           = mathSqrt(storedMiddleVel.x * storedMiddleVel.x + storedMiddleVel.z * storedMiddleVel.z) -- Velocity magnitude of the vehicle on the local horizontal plane (m/s)
+
+    -- storedVData.localAngularVel        = vehiclePR.localAngularVelocity
+    -- storedVData.localWheelVelocities   = storedLocalWheelVel -- Wheel velocities in local space, 0-based indexing
+
     storedVData.fWheelWeights          = storedFWheelWeights -- Front wheel loads, for using a weighted average
     storedVData.rWheelWeights          = storedRWheelWeights -- Rear wheel loads, for using a weighted average
-    storedVData.travelDirection        = lib.numberGuard(math.deg(math.atan2(storedMiddleVel.x, storedMiddleVel.z))) -- The angle of the vehicle's velocity vector on the local horizontal plane (deg), at the average position of all wheels
+
+    -- storedVData.travelDirection        = libNumberGuard(mathDeg(mathAtan2(storedMiddleVel.x, storedMiddleVel.z))) -- The angle of the vehicle's velocity vector on the local horizontal plane (deg), at the average position of all wheels
+
     storedVData.frontSlipDeg           = frontSlipDeg -- Average front wheel slip angle, weighted by wheel load (deg)
     storedVData.rearSlipDeg            = rearSlipDeg -- Average rear wheel slip angle, weighted by wheel load (deg)
-    storedVData.frontSlipRatio         = frontSlipRatio -- Average front wheel slip angle, weighted by wheel load (deg)
-    storedVData.rearSlipRatio          = rearSlipRatio -- Average rear wheel slip angle, weighted by wheel load (deg)
+    storedVData.frontSlipRatio         = frontSlipRatio -- Average front wheel slip ratio, weighted by wheel load
+    storedVData.rearSlipRatio          = rearSlipRatio -- Average rear wheel slip ratio, weighted by wheel load
     storedVData.frontNdSlip            = frontNdSlip -- Average normalized front slip, weighted by wheel load
     storedVData.rearNdSlip             = rearNdSlip -- Average normalized rear slip, weighted by wheel load
-    storedVData.totalNdSlip            = totalNdSlip
-    storedVData.totalNdSlipBiased      = totalNdSlipBiased
-    storedVData.fwdVelClamped          = math.max(0.0, storedMiddleVel.z) -- Velocity along the local forwrad axis, positive only (m/s)
-    storedVData.fAxleLocalVel          = storedFAxleLocalVel -- Local velocity of the front axle (same as the average of the front wheels)
+
+    -- storedVData.totalNdSlip            = totalNdSlip
+    -- storedVData.totalNdSlipBiased      = totalNdSlipBiased
+    -- storedVData.fwdVelClamped          = mathMax(0.0, storedMiddleVel.z) -- Velocity along the local forwrad axis, positive only (m/s)
+    -- storedVData.fAxleLocalVel          = storedFAxleLocalVel -- Local velocity of the front axle (same as the average of the front wheels)
+
     storedVData.rAxleLocalVel          = storedRAxleLocalVel -- Local velocity of the rear axle (same as the average of the rear wheels)
-    storedVData.fAxleHVelLen           = math.sqrt(storedFAxleLocalVel.x * storedFAxleLocalVel.x + storedFAxleLocalVel.z * storedFAxleLocalVel.z)
+
+    storedVData.fAxleHVelLen           = mathSqrt(storedFAxleLocalVel.x * storedFAxleLocalVel.x + storedFAxleLocalVel.z * storedFAxleLocalVel.z)
     storedVData.cPhys                  = cPhys
     storedVData.perfData               = storedCarPerformanceData
     storedVData.shiftingTable          = storedShiftingTable
@@ -321,22 +370,23 @@ local function weightedAverageWheelValue(values, wheelLoads, loadExponent)
 end
 
 local function sineGenerator(phase, power, signedOutput)
-    local sine = math.sin(phase * 2.0 * math.pi)
-    local ret = math.abs(sine) ^ power
-    if signedOutput then
-        ret = ret * math.sign(sine)
+    local sine = mathSin(phase * 2.0 * mathPi)
+    local ret = libSignedPow(sine, power)
+    if not signedOutput then
+        ret = ret * 0.5 + 0.5
     end
     return ret
 end
 
 local function calcProgressiveFeedback(inputValue, rangeStart, rangeEnd, startingFeedback)
     if inputValue < rangeStart then
-        return 0.0
+        return 0.0, 0.0
     end
 
-    local initialFadeIn = math.smoothstep(math.lerpInvSat(inputValue, rangeStart, math.lerp(rangeStart, rangeEnd, 0.1)))
-    local progression = math.lerpInvSat(inputValue, rangeStart, rangeEnd)
-    return (progression ^ 2.0) * initialFadeIn * (1.0 - startingFeedback) + startingFeedback -- was 2.5
+    local initialFadeIn = mathSmoothstep(mathLerpInvSat(inputValue, rangeStart, mathLerp(rangeStart, rangeEnd, 0.1)))
+    local progression = mathLerpInvSat(inputValue, rangeStart, rangeEnd)
+    local fullRangeFeedback = (progression ^ 2.0) * initialFadeIn -- was 2.5
+    return fullRangeFeedback * (1.0 - startingFeedback) + startingFeedback, fullRangeFeedback
 end
 
 local function centeringForceMult(normalizedSlipAngle)
@@ -348,20 +398,20 @@ local function centeringForceMult(normalizedSlipAngle)
         return 1.0
     end
 
-    return 2.0 * math.smootherstep(x) - 1.0
+    return 2.0 * mathSmootherstep(x) - 1.0
 end
 
 local function getExponentialDecayBlend(dt, smoothingTime)
-    smoothingTime = math.max(1e-6, smoothingTime)
-    return 1.0 - math.exp(-dt / smoothingTime)
+    smoothingTime = mathMax(1e-6, smoothingTime)
+    return 1.0 - mathExp(-dt / smoothingTime)
 end
 
 -- ============================ state
 
 local function getLowPassLimits(cornerFrequency)
     local relationship = 2.5
-    local corner = math.min(160.0 / relationship, cornerFrequency)
-    local nyquist = math.min(160.0, corner * relationship)
+    local corner = mathMin(166.0 / relationship, cornerFrequency)
+    local nyquist = mathMin(166.0, corner * relationship)
     return nyquist, corner
 end
 
@@ -433,6 +483,81 @@ end)
 
 -- ============================ ffb processing
 
+---@param surfaceType ac.SurfaceExtendedType
+---@return number strengthMult, number velocityMult
+local function getRoadTextureSurfaceParams(surfaceType) -- just based on vibes tbh
+    if surfaceType == ac.SurfaceExtendedType.Base or surfaceType == ac.SurfaceExtendedType.Kerb or surfaceType == ac.SurfaceExtendedType.Old then
+        return 1.0, 1.0
+    end
+
+    if surfaceType == ac.SurfaceExtendedType.ExtraTurf then
+        return 0.5, 2.0
+    end
+
+    if surfaceType == ac.SurfaceExtendedType.Grass or surfaceType == ac.SurfaceExtendedType.Gravel or surfaceType == ac.SurfaceExtendedType.Sand then
+        return 2.0, 0.5
+    end
+
+    if surfaceType == ac.SurfaceExtendedType.Snow or surfaceType == ac.SurfaceExtendedType.Ice then
+        return 0.5, 1.0
+    end
+
+    return 1.0, 1.0
+end
+
+local roadTextureFilter1 = biquadFilter.new("HighPass", physicsUpdateRate, 55.0) -- high pass
+local roadTextureFilter2 = biquadFilter.new("LowPass", biquadFilter.calculateLowPassParameters(physicsUpdateRate, 100.0, 75.0)) -- low pass
+local prevFilteredNoise = 0.0
+local prevSurfaceTypeStrength = 1.0
+local function getRoadTextureNoise(fAxleHVelLen, frontAxleLoad, currentFrontAxleLoadEst, frontLsExpY, frontNdSlip, w0SurfaceType, w1SurfaceType)
+    if frontAxleLoad < 1e-6 then
+        return 0.0
+    end
+
+    local roadTextureV0 = 10.0 / 3.6
+    local roadTextureV1 = 300.0 / 3.6
+    local roadTextureV1OverV0 = roadTextureV1 / roadTextureV0
+    local roadTextureBandStartV1 = 55.0
+    local roadTextureBandStartV0 = roadTextureBandStartV1 / roadTextureV1OverV0
+    local roadTextureBandEndV1 = 75.0
+    local roadTextureBandEndV0 = roadTextureBandEndV1 / roadTextureV1OverV0
+    local roadTextureNyquistV1 = 100.0
+    local roadTextureNyquistV0 = roadTextureNyquistV1 / roadTextureV1OverV0
+
+    local w0SurfaceTypeStrength, w0SpeedMult = getRoadTextureSurfaceParams(w0SurfaceType)
+    local w1SurfaceTypeStrength, w1SpeedMult = getRoadTextureSurfaceParams(w1SurfaceType)
+    local surfaceTypeStrengthMult = mathLerp(prevSurfaceTypeStrength, (w0SurfaceTypeStrength + w1SurfaceTypeStrength) * 0.5, getExponentialDecayBlend(0.003, 0.05))
+    prevSurfaceTypeStrength = surfaceTypeStrengthMult
+    local surfaceTypeSpeedMult = (w0SpeedMult + w1SpeedMult) * 0.5 -- technically the two speeds should be used to generate 2 different noise patterns, but this will do
+
+    local velocityT = mathSmoothstep(mathLerpInvSat(fAxleHVelLen * surfaceTypeSpeedMult, roadTextureV0, roadTextureV1))
+    -- local velocityT = mathLerpInvSat(fAxleHVelLen, roadTextureV0, roadTextureV1)
+    local bandStart = mathLerp(roadTextureBandStartV0, roadTextureBandStartV1, velocityT)
+    local bandEnd = mathLerp(roadTextureBandEndV0, roadTextureBandEndV1, velocityT * 0.9 + 0.1) -- the modified T allows slightly more high frequencies at low speed
+    local nyquist = mathLerp(roadTextureNyquistV0, roadTextureNyquistV1, velocityT * 0.9 + 0.1)
+    -- local bandStart = libLogInterpolation(roadTextureBandStartV0, roadTextureBandStartV1, velocityT)
+    -- local bandEnd = libLogInterpolation(roadTextureBandEndV0, roadTextureBandEndV1, velocityT)
+    -- local nyquist = libLogInterpolation(roadTextureNyquistV0, roadTextureNyquistV1, velocityT)
+    nyquist = mathMin(166.0, nyquist)
+    bandEnd = mathMin(nyquist * 0.9, bandEnd)
+    roadTextureFilter1:updateParameters(physicsUpdateRate, bandStart)
+    roadTextureFilter2:updateParameters(biquadFilter.calculateLowPassParameters(physicsUpdateRate, nyquist, bandEnd))
+    local loadMult = (frontAxleLoad / currentFrontAxleLoadEst) ^ frontLsExpY
+    local velocityMult = mathSmoothstep(mathLerpInvSat(fAxleHVelLen, 0.1 * roadTextureV0, mathMin(roadTextureV0 * 1.0, roadTextureV1)))
+    local slipMult = mathAbs(2.0 * frontNdSlip / (frontNdSlip * frontNdSlip + 1.0))
+    if frontNdSlip < 1.0 then
+        slipMult = slipMult * 0.75 + 0.25
+    end
+
+    ac.debug("Hap | road texture surface type mult", surfaceTypeStrengthMult, 0.0, 1.0)
+
+    local input = mathRandom()
+    local filteredNoise = roadTextureFilter2:process(roadTextureFilter1:process(input)) * loadMult * velocityMult * slipMult * 6.0 -- correction factor for roughly 1.0 magnitude on average
+    filteredNoise = mathLerp(prevFilteredNoise, filteredNoise, getExponentialDecayBlend(0.003, 0.005)) -- this just very slightly takes the edge off at higher speeds
+    prevFilteredNoise = filteredNoise
+    return libClampEased(filteredNoise, -2.0, 2.0, 0.25) * surfaceTypeStrengthMult -- this is applied outside the clamp
+end
+
 local function onProcessingSkip(ffbValue, vehicle) -- clears any leftover state from all the effects when the overall processing is disabled
     ffbABSFiltered = ffbValue
     brakeFeelFilter:reset(0.0)
@@ -474,7 +599,7 @@ local function processFFB(ffbValue, dt)
     local topSpeedEst = vData.perfData:getTopSpeedEstimate()
     local vRef = topSpeedEst * vRefPointNd
     ac.debug("Gen | vRef", vRef * 3.6)
-    local lowSpeedFade = math.smoothstep(math.lerpInvSat(vData.localHVelLen, 4.0 / 3.6, 12.0 / 3.6)) -- fades out certain effects near a standstill
+    local lowSpeedFade = mathSmoothstep(mathLerpInvSat(vData.localHVelLen, 4.0 / 3.6, 12.0 / 3.6)) -- fades out certain effects near a standstill
     local frontWheelLoadAtRest = vData.perfData:getFrontTireLoadAtRest(vData.wheelbase, rAxlePos.z)
     local frontWheelLoadAt70PercentSpeed = vData.perfData:getFrontTireLoadAtNdSpeed(vRefPointNd, vData.wheelbase, rAxlePos.z)
     local mzEstimateAt70PercentSpeed = vData.perfData:getMzEstimate(frontWheelLoadAt70PercentSpeed, vData.vehicle.wheels[1].tyreRadius)
@@ -499,7 +624,7 @@ local function processFFB(ffbValue, dt)
     -- ac.debug("f fz0", vData.perfData.frontFZ0)
     -- ac.debug("f axis dot", vData.perfData.steerBasisAxis:dot(vec3(0, 1, 0)))
 
-    -- ac.debug("DATA", string.format("%.1f\t%.1f\t%.1f\t%.1f\t%.0f\t%.4f\t%.4f", math.abs(vData.vehiclePR.wheels[1].fy), math.abs(vData.vehiclePR.wheels[1].mz), vData.vehiclePR.wheels[1].load, vData.perfData.frontFZ0, vData.perfData.frontTireRate, vData.perfData.steerBasisAxis:dot(vec3(0, 1, 0)), vData.vehicle.wheels[1].tyreRadius))
+    -- ac.debug("DATA", string.format("%.1f\t%.1f\t%.1f\t%.1f\t%.0f\t%.4f\t%.4f", mathAbs(vData.vehiclePR.wheels[1].fy), mathAbs(vData.vehiclePR.wheels[1].mz), vData.vehiclePR.wheels[1].load, vData.perfData.frontFZ0, vData.perfData.frontTireRate, vData.perfData.steerBasisAxis:dot(vec3(0, 1, 0)), vData.vehicle.wheels[1].tyreRadius))
 
     local function getFFBBaseStrength(load, mz)
         load = load or frontWheelLoadAt70PercentSpeed
@@ -512,32 +637,28 @@ local function processFFB(ffbValue, dt)
     local ffbBaseStrengthVDynamic = getFFBBaseStrength(frontWheelLoadAtCurrentSpeed, mzEstimateAtCurrentSpeed)
     local ffbRefLevelVDynamic = ffbBaseStrengthVDynamic * ac.getFFBGain() -- signed
 
-    local rAxleHVelAngle = lib.numberGuard(math.deg(math.atan2(vData.rAxleLocalVel.x, math.abs(vData.rAxleLocalVel.z)))) -- reflected at 90 degrees
-    local rAxleHVelAngleRaw = lib.numberGuard(math.deg(math.atan2(vData.rAxleLocalVel.x, vData.rAxleLocalVel.z))) -- -180 to 180
+    local rAxleHVelAngle = libNumberGuard(mathDeg(mathAtan2(vData.rAxleLocalVel.x, mathAbs(vData.rAxleLocalVel.z)))) -- reflected at 90 degrees
+    local rAxleHVelAngleRaw = libNumberGuard(mathDeg(mathAtan2(vData.rAxleLocalVel.x, vData.rAxleLocalVel.z))) -- -180 to 180
 
     ac.debug("Gen | FFB est at vRef", ffbRefLevelVRef, -1.0, 1.0)
-    -- local currentEstFFB = vData.perfData:getFFBPeakStrengthEstimateCurrnet(vData.vehicle.wheels[1].tyreRadius, vData.vehicle.ffbBase) * ac.getFFBGain()
+    -- local currentEstFFB = vData.perfData:getFFBPeakStrengthEstimateCurrent(vData.vehicle.wheels[1].tyreRadius, vData.vehicle.ffbBase) * ac.getFFBGain()
 
     local finalFFB = ffbValue
 
     -- auto gain
 
-    local function processAutoGain()
-        local adjustAutoGain = getConfigValue("autoAdjustGain")
-        local autoGainOffset = getConfigValue("autoGainOffset")
-        local newMultiplier = 1.0 / ffbBaseStrengthVRef * (1.0 + autoGainOffset)
-        newMultiplier = lib.numberGuard(math.round(math.clamp(newMultiplier, 0.2, 5.0) * 100.0) / 100.0, vData.vehicle.ffbMultiplier)
-        runtimeData.autoGainLevel = math.round(newMultiplier * 100.0)
+    local adjustAutoGain = getConfigValue("autoAdjustGain")
+    local autoGainOffset = getConfigValue("autoGainOffset")
+    local newGainMultiplier = 1.0 / ffbBaseStrengthVRef * (1.0 + autoGainOffset)
+    newGainMultiplier = libNumberGuard(mathRound(mathClamp(newGainMultiplier, 0.2, 5.0) * 100.0) / 100.0, vData.vehicle.ffbMultiplier)
+    runtimeData.autoGainLevel = mathRound(newGainMultiplier * 100.0)
 
-        if adjustAutoGain and (now - lastGainChangeAttempt) >= (1.0 / 20.0) then
-            lastGainChangeAttempt = now
-            if math.abs(vData.vehicle.ffbMultiplier - newMultiplier) > 0.00099 then
-                ac.broadcastSharedEvent("AFFBT_setFFBMultiplier", newMultiplier)
-            end
+    if adjustAutoGain and (now - lastGainChangeAttempt) >= (1.0 / 15.0) then
+        lastGainChangeAttempt = now
+        if mathAbs(vData.vehicle.ffbMultiplier - newGainMultiplier) > 0.00099 then
+            ac.broadcastSharedEvent("AFFBT_setFFBMultiplier", newGainMultiplier)
         end
     end
-
-    processAutoGain()
 
     -- abs filter
 
@@ -546,7 +667,7 @@ local function processFFB(ffbValue, dt)
     if vData.vehiclePR.wheels[0].abs > absTriggerThreshold or vData.vehiclePR.wheels[1].abs > absTriggerThreshold then
         tSinceLastFrontABSPulse = 0.0
     else
-        tSinceLastFrontABSPulse = math.min(3600.0, tSinceLastFrontABSPulse + dt)
+        tSinceLastFrontABSPulse = mathMin(3600.0, tSinceLastFrontABSPulse + dt)
     end
 
     local absFilterBlend = 1.0
@@ -555,10 +676,10 @@ local function processFFB(ffbValue, dt)
         local maxFilterRT = 0.0175 --0.0175
         local filterHoldTime = 0.1
         local filterFadeTime = 0.1
-        local absFilterMult = math.smoothstep(math.lerpInvSat(tSinceLastFrontABSPulse - filterHoldTime, filterFadeTime, 0.0))
+        local absFilterMult = mathSmoothstep(mathLerpInvSat(tSinceLastFrontABSPulse - filterHoldTime, filterFadeTime, 0.0))
         ac.debug("ABS Filt | current mult", absFilterMult, 0.0, 1.0)
         absFilterBlend = getExponentialDecayBlend(dt, maxFilterRT * absFilterMult)
-        ffbABSFiltered = math.lerp(ffbABSFiltered, finalFFB, absFilterBlend)
+        ffbABSFiltered = mathLerp(ffbABSFiltered, finalFFB, absFilterBlend)
         finalFFB = ffbABSFiltered
     else
         ffbABSFiltered = finalFFB
@@ -588,12 +709,12 @@ local function processFFB(ffbValue, dt)
     --     -- ac.debug("wb bottom raw", vData.perfData.tmpWbBottom)
     -- end
 
-    -- ac.debug("current ffb pred", vData.perfData:getFFBPeakStrengthEstimate((vData.vehiclePR.wheels[0].load + vData.vehiclePR.wheels[1].load) * 0.5, vData.vehicle.wheels[1].tyreRadius, vData.vehicle.ffbBase, (vData.vehiclePR.wheels[0].mz + vData.vehiclePR.wheels[1].mz) * math.sign(-vData.frontSlipDeg)) * math.abs(ac.getFFBGain()), 0.0, 1.0)
+    -- ac.debug("current ffb pred", vData.perfData:getFFBPeakStrengthEstimate((vData.vehiclePR.wheels[0].load + vData.vehiclePR.wheels[1].load) * 0.5, vData.vehicle.wheels[1].tyreRadius, vData.vehicle.ffbBase, (vData.vehiclePR.wheels[0].mz + vData.vehiclePR.wheels[1].mz) * mathSign(-vData.frontSlipDeg)) * mathAbs(ac.getFFBGain()), 0.0, 1.0)
 
     local extraSAT = getConfigValue("extraSAT")
 
     if getConfigValue("extraSATSuspensionCompensation") then
-        extraSAT = extraSAT * math.max(0.1, 0.5 / mzRatioInFFB - 1.0)
+        extraSAT = extraSAT * mathMax(0.1, 0.5 / mzRatioInFFB - 1.0)
     end
 
     if extraSAT > 1e-6 then
@@ -638,27 +759,23 @@ local function processFFB(ffbValue, dt)
                 downforceEffect = dfMult
             end
         elseif dfCompMode == 2 then
-            downforceEffect = lib.clamp01(getConfigValue("downforceCompDynamicRange") / dfDynamicRange)
+            downforceEffect = libClamp01(getConfigValue("downforceCompDynamicRange") / dfDynamicRange)
         end
 
-        runtimeData.downforceDynamicRange = math.max(0.0, dfDynamicRange)
+        runtimeData.downforceDynamicRange = mathMax(0.0, dfDynamicRange)
 
-        local function getCompensatedFFBMult()
-            local standstillLoadFactor = (frontWheelLoadAtRest / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
-            local currentLoadFactor = ((vData.perfData.fAxleDownforce * fDownforceMult + frontWheelLoadAtRest) / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
-            local ret = math.lerp(1.0 / (currentLoadFactor / standstillLoadFactor), 1.0, downforceEffect)
-            local midSpeedLoadFactor = (frontWheelLoadAt70PercentSpeed / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
-            local multAtVRef = math.lerp(1.0 / (midSpeedLoadFactor / standstillLoadFactor), 1.0, downforceEffect)
-            local makeupGain = 1.0
+        local standstillLoadFactor = (frontWheelLoadAtRest / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
+        local currentLoadFactor = ((vData.perfData.fAxleDownforce * fDownforceMult + frontWheelLoadAtRest) / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
+        local ret = mathLerp(1.0 / (currentLoadFactor / standstillLoadFactor), 1.0, downforceEffect)
+        local midSpeedLoadFactor = (frontWheelLoadAt70PercentSpeed / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
+        local multAtVRef = mathLerp(1.0 / (midSpeedLoadFactor / standstillLoadFactor), 1.0, downforceEffect)
+        local makeupGain = 1.0
 
-            if getConfigValue("downforceCompMakeupGain") then
-                makeupGain = 1.0 / multAtVRef --math.lerp(1.0 / (standstillLoadFactor / midSpeedLoadFactor), 1.0, downforceEffect)
-            end
-
-            return lib.numberGuard(math.min(1.0, ret) * makeupGain), lib.numberGuard(math.min(1.0, multAtVRef), 1.0)
+        if getConfigValue("downforceCompMakeupGain") then
+            makeupGain = 1.0 / multAtVRef --mathLerp(1.0 / (standstillLoadFactor / midSpeedLoadFactor), 1.0, downforceEffect)
         end
 
-        local ffbMult, ffbMultAtVRef = getCompensatedFFBMult()
+        local ffbMult, ffbMultAtVRef = libNumberGuard(mathMin(1.0, ret) * makeupGain), libNumberGuard(mathMin(1.0, multAtVRef), 1.0)
 
         finalFFB = finalFFB * ffbMult
         dfMultApplied = ffbMult
@@ -689,7 +806,7 @@ local function processFFB(ffbValue, dt)
         local peakFrac = 5.0 -- 3.5 matches SAT
         local longitudinalFeelExponent = getConfigValue("brakeFeelExponent")
         local effectPeakStrength = brakeFeel * ffbRefLevelVRef * dfMultAtRefSpeed
-        local longitudinalFeelAdditive = math.max(0.0, lib.signedPow(frontLongitudinalForceNd, longitudinalFeelExponent)) * effectPeakStrength * centeringForceMult(-peakFrac * vData.frontSlipDeg / frontPeakSlipAngle)
+        local longitudinalFeelAdditive = mathMax(0.0, libSignedPow(frontLongitudinalForceNd, longitudinalFeelExponent)) * effectPeakStrength * centeringForceMult(-peakFrac * vData.frontSlipDeg / frontPeakSlipAngle)
         longitudinalFeelAdditive = longitudinalFeelAdditive * lowSpeedFade
         finalFFB = finalFFB + longitudinalFeelAdditive
 
@@ -708,9 +825,9 @@ local function processFFB(ffbValue, dt)
     if lockupFeelAllowed and lockupFeel > 1e-6 then
         local lockupSRStart = 1.0
         local lockupSREnd = 2.0
-        prevBrakingSR = math.lerp(prevBrakingSR, math.max(0.0, -vData.frontSlipRatio), absFilterBlend) -- if the abs filter is enabled we also filter the slip ratio here to avoid adding back abs noise
+        prevBrakingSR = mathLerp(prevBrakingSR, mathMax(0.0, -vData.frontSlipRatio), absFilterBlend) -- if the abs filter is enabled we also filter the slip ratio here to avoid adding back abs noise
         local frontSRUsed = prevBrakingSR
-        local lockupFeelMult = math.lerp(1.0, 1.0 - lockupFeel, math.smoothstep(math.lerpInvSat(frontSRUsed / frontPeakSlipRatio, lockupSRStart, lockupSREnd)))
+        local lockupFeelMult = mathLerp(1.0, 1.0 - lockupFeel, mathSmoothstep(mathLerpInvSat(frontSRUsed / frontPeakSlipRatio, lockupSRStart, lockupSREnd)))
         finalFFB = finalFFB * lockupFeelMult
     else
         prevBrakingSR = 0.0
@@ -718,7 +835,7 @@ local function processFFB(ffbValue, dt)
 
     -- oversteer feel
 
-    local oversteerFeelProtectionFade = math.smoothstep(oversteerFeelConditionSmoother:get(math.min((vData.nWheelsAirborne >= 3) and 0.0 or 1.0, 1.0 - lastCollisionProtectionBlend * 0.5), dt)) -- fades out oversteer feel if either car car is airborne or if collision protection is active
+    local oversteerFeelProtectionFade = mathSmoothstep(oversteerFeelConditionSmoother:get(mathMin((vData.nWheelsAirborne >= 3) and 0.0 or 1.0, 1.0 - lastCollisionProtectionBlend * 0.5), dt)) -- fades out oversteer feel if either car car is airborne or if collision protection is active
 
     local oversteerFeel = getConfigValue("oversteerFeel")
     if oversteerFeel > 1e-6 then
@@ -726,14 +843,14 @@ local function processFFB(ffbValue, dt)
         -- local oversteerFeelStrength = ffbRefLevelVRef * dfMultAtRefSpeed * oversteerFeel
         local ndSlipAngleThreshold = getConfigValue("oversteerFeelAggression")
         local oversteerFeelStrength = ffbRefLevelVDynamic * oversteerFeel
-        local reverseFade = math.smoothstep(1.0 - math.lerpInvSat(math.abs(rAxleHVelAngleRaw), 90.0, 110.0)) -- fading out oversteer feel if the car is reversing
+        local reverseFade = mathSmoothstep(1.0 - mathLerpInvSat(mathAbs(rAxleHVelAngleRaw), 90.0, 110.0)) -- fading out oversteer feel if the car is reversing
         local rAxleHVelAngleUsed = rAxleHVelAngle -- + (rAxleHVelAngle - prevRAxleHVelAngle) / dt * 0.5
-        local oversteerFeelAdditive = math.smoothstep(math.lerpInvSat(math.abs(rAxleHVelAngleUsed) / rearPeakSlipAngle, 0.9 * ndSlipAngleThreshold, 1.4 * ndSlipAngleThreshold)) * math.sign(rAxleHVelAngleUsed) * oversteerFeelStrength
+        local oversteerFeelAdditive = mathSmoothstep(mathLerpInvSat(mathAbs(rAxleHVelAngleUsed) / rearPeakSlipAngle, 0.9 * ndSlipAngleThreshold, 1.4 * ndSlipAngleThreshold)) * mathSign(rAxleHVelAngleUsed) * oversteerFeelStrength
         finalFFB = finalFFB + oversteerFeelAdditive * lowSpeedFade * reverseFade * oversteerFeelProtectionFade
 
-        -- ac.debug("oversteer 1", math.abs(rAxleHVelAngle) / rearPeakSlipAngle, 0.0, 4.0)
-        -- ac.debug("oversteer 2", math.abs(rAxleHVelAngle - math.deg(vData.vehiclePR.localAngularVelocity.y) * 0.5) / rearPeakSlipAngle, 0.0, 4.0)
-        -- ac.debug("oversteer 2", math.abs(rAxleHVelAngle + (rAxleHVelAngle - prevRAxleHVelAngle) / dt * 0.5) / rearPeakSlipAngle, 0.0, 4.0)
+        -- ac.debug("oversteer 1", mathAbs(rAxleHVelAngle) / rearPeakSlipAngle, 0.0, 4.0)
+        -- ac.debug("oversteer 2", mathAbs(rAxleHVelAngle - mathDeg(vData.vehiclePR.localAngularVelocity.y) * 0.5) / rearPeakSlipAngle, 0.0, 4.0)
+        -- ac.debug("oversteer 2", mathAbs(rAxleHVelAngle + (rAxleHVelAngle - prevRAxleHVelAngle) / dt * 0.5) / rearPeakSlipAngle, 0.0, 4.0)
 
         -- prevRAxleHVelAngle = rAxleHVelAngle
 
@@ -768,7 +885,7 @@ local function processFFB(ffbValue, dt)
         localRearZ = localRearZ * 0.5
         -- ac.debug("carPos2", car.transform:transformPoint(car.graphicsToPhysicsTransform:transformPoint(vec3(-0.876232, 0.210434, 1.64501))))
 
-        local bottomTolerance = vData.vehicle.aabbSize.y * 0.05 + math.lerp(vData.vehicle.rideHeight[0], vData.vehicle.rideHeight[1], lib.inverseLerp(localFrontZ, localRearZ, collisionPhysicsPos.z))
+        local bottomTolerance = vData.vehicle.aabbSize.y * 0.05 + mathLerp(vData.vehicle.rideHeight[0], vData.vehicle.rideHeight[1], libInverseLerp(localFrontZ, localRearZ, collisionPhysicsPos.z))
 
         -- local collPosTmp = collisionPhysicsPos:clone()
         -- collPosTmp.y = highestContactPatchY + bottomTolerance
@@ -783,7 +900,7 @@ local function processFFB(ffbValue, dt)
                 local minValue = 9999
                 for i = 1, preCollisionFFBHistory:getNewestIndex(), 1 do
                     local val = preCollisionFFBHistory:get(i)
-                    if math.abs(val) < math.abs(minValue) then -- and math.sign(val) == math.sign(minValue)
+                    if mathAbs(val) < mathAbs(minValue) then -- and mathSign(val) == mathSign(minValue)
                         minValue = val
                     end
                 end
@@ -800,18 +917,18 @@ local function processFFB(ffbValue, dt)
             end
         end
 
-        local collisionProtectionBlend = math.smoothstep(math.lerpInvSat(collisionProtectionTimer, 0.0, protectionFadeOutDuration))
-        collisionProtectionTimer = math.max(0.0, collisionProtectionTimer - dt / 1.0)
+        local collisionProtectionBlend = mathSmoothstep(mathLerpInvSat(collisionProtectionTimer, 0.0, protectionFadeOutDuration))
+        collisionProtectionTimer = mathMax(0.0, collisionProtectionTimer - dt / 1.0)
         local ffbUsed = finalFFB
-        -- ffbUsed = ffbUsed * math.lerp(1.0, 0.75, collisionProtectionBlend) -- is this good
-        if collisionProtectionBlend > 1e-6 and math.abs(ffbUsed) < math.abs(ffbPeakProtected) * 0.999 then -- less filtering if the ffb is reducing, this prevents high values from being held too long
-            collisionProtectionBlend = math.min(collisionProtectionBlend, 0.1)
+        -- ffbUsed = ffbUsed * mathLerp(1.0, 0.75, collisionProtectionBlend) -- is this good
+        if collisionProtectionBlend > 1e-6 and mathAbs(ffbUsed) < mathAbs(ffbPeakProtected) * 0.999 then -- less filtering if the ffb is reducing, this prevents high values from being held too long
+            collisionProtectionBlend = mathMin(collisionProtectionBlend, 0.1)
         end
         local finalCollisionProtectionBlend = collisionProtectionBlend
         local smoothingTime = 0.22
-        ffbPeakProtected = math.lerp(ffbPeakProtected, ffbUsed, getExponentialDecayBlend(dt, smoothingTime * finalCollisionProtectionBlend))
+        ffbPeakProtected = mathLerp(ffbPeakProtected, ffbUsed, getExponentialDecayBlend(dt, smoothingTime * finalCollisionProtectionBlend))
         local peakProtectionDiff = 0.075 -- allows a small amount of deviation from the filtered version
-        local ffbProtected2 = lib.clampEased(ffbUsed, ffbPeakProtected - math.abs(ffbRefLevelVDynamic) * peakProtectionDiff, ffbPeakProtected + math.abs(ffbRefLevelVDynamic) * peakProtectionDiff, 0.5)
+        local ffbProtected2 = libClampEased(ffbUsed, ffbPeakProtected - mathAbs(ffbRefLevelVDynamic) * peakProtectionDiff, ffbPeakProtected + mathAbs(ffbRefLevelVDynamic) * peakProtectionDiff, 0.5)
         ac.debug("Col prot | protection blend", finalCollisionProtectionBlend, 0.0, 1.0)
         finalFFB = ffbProtected2
         lastCollisionProtectionBlend = finalCollisionProtectionBlend
@@ -820,13 +937,37 @@ local function processFFB(ffbValue, dt)
         lastCollisionProtectionBlend = 0.0
     end
 
+    -- road texture
+
+    local extraAdditivePostFilter = 0.0
+    local roadTextureSetting = getConfigValue("roadTexture")
+    if roadTextureSetting > 1e-6 then
+        local roadTextureNoise = getRoadTextureNoise(
+            vData.fAxleHVelLen,
+            vData.vehiclePR.wheels[0].load + vData.vehiclePR.wheels[1].load,
+            frontWheelLoadAtCurrentSpeed * 2.0,
+            vData.perfData.frontLsExpY,
+            vData.frontNdSlip,
+            vData.vehiclePR.wheels[0].surfaceExtendedType,
+            vData.vehiclePR.wheels[1].surfaceExtendedType
+        )
+        ac.debug("Hap | road texture", roadTextureNoise, -1.0, 1.0)
+        local roadTextureAdditive = ffbRefLevelVDynamic * roadTextureSetting * roadTextureNoise
+        if getConfigValue("roadTextureBypassFilter") then
+            extraAdditivePostFilter = roadTextureAdditive
+        else
+            finalFFB = finalFFB + roadTextureAdditive
+        end
+    end
+
+
     -- -- spike removal
 
     -- if true then
     --     local w0Normal = vData.vehiclePR.wheels[0].load > 1e-6 and vData.vehiclePR.wheels[0].contactNormal or vData.vehicle.wheels[0].up
     --     local w1Normal = vData.vehiclePR.wheels[1].load > 1e-6 and vData.vehiclePR.wheels[1].contactNormal or vData.vehicle.wheels[1].up
-    --     local w0NormalChangeRate = lib.numberGuard(lib.angleBetween(w0PrevNormal, w0Normal) / dt)
-    --     local w1NormalChangeRate = lib.numberGuard(lib.angleBetween(w1PrevNormal, w1Normal) / dt)
+    --     local w0NormalChangeRate = libNumberGuard(lib.angleBetween(w0PrevNormal, w0Normal) / dt)
+    --     local w1NormalChangeRate = libNumberGuard(lib.angleBetween(w1PrevNormal, w1Normal) / dt)
     --     w0PrevNormal:set(w0Normal)
     --     w1PrevNormal:set(w1Normal)
     --     local w0DamperVel = vData.vehiclePR.wheels[0].damperSpeed
@@ -844,7 +985,7 @@ local function processFFB(ffbValue, dt)
     --         local minValue = 9999.0
     --         for i = 1, preCollisionFFBHistory:getNewestIndex(), 1 do
     --             local val = preCollisionFFBHistory:get(i)
-    --             if math.abs(val) < math.abs(minValue) then
+    --             if mathAbs(val) < mathAbs(minValue) then
     --                 minValue = val
     --             end
     --         end
@@ -855,16 +996,16 @@ local function processFFB(ffbValue, dt)
     --     w0PrevSurfaceType = w0SurfaceType
     --     w1PrevSurfaceType = w1SurfaceType
 
-    --     local spikeRemovalBlend = math.smoothstep(math.lerpInvSat(spikeRemovalTimer, 0.0, protectionFadeOutDuration))
-    --     spikeRemovalTimer = math.max(0.0, spikeRemovalTimer - dt / 1.0)
+    --     local spikeRemovalBlend = mathSmoothstep(mathLerpInvSat(spikeRemovalTimer, 0.0, protectionFadeOutDuration))
+    --     spikeRemovalTimer = mathMax(0.0, spikeRemovalTimer - dt / 1.0)
 
-    --     if spikeRemovalBlend > 1e-6 and math.abs(finalFFB) < math.abs(ffbPeakProtected) then -- less filtering if the ffb is reducing, this prevents high values from being held too long
-    --         spikeRemovalBlend = 0.1 --math.min(0.1, finalCollisionProtectionBlend)
+    --     if spikeRemovalBlend > 1e-6 and mathAbs(finalFFB) < mathAbs(ffbPeakProtected) then -- less filtering if the ffb is reducing, this prevents high values from being held too long
+    --         spikeRemovalBlend = 0.1 --mathMin(0.1, finalCollisionProtectionBlend)
     --     end
 
     --     ac.debug("spikeRemovalBlend", spikeRemovalBlend, 0.0, 1.0)
 
-    --     finalPeakRemovalBlend = math.max(finalPeakRemovalBlend, spikeRemovalBlend)
+    --     finalPeakRemovalBlend = mathMax(finalPeakRemovalBlend, spikeRemovalBlend)
     --     -- ac.debug("W1 normal angular vel", w1NormalChangeRate, 0.0, 100.0)
     --     -- ac.debug("W1 damper vel", vData.vehiclePR.wheels[1].damperSpeed, -1.0, 1.0)
     -- else
@@ -887,6 +1028,8 @@ local function processFFB(ffbValue, dt)
         filter:reset(finalFFB)
     end
 
+    finalFFB = finalFFB + extraAdditivePostFilter
+
     -- haptics, after the filter so the vibrations dont get killed by filtering
 
     local vibrationSource = getConfigValue("vibrationSource")
@@ -894,15 +1037,15 @@ local function processFFB(ffbValue, dt)
     local rawExtrapolatedRPM = vData.vehiclePR.rpm * (1.0 + vData.vehiclePR.gForces.z * rpmExtrapolation)
     local smoothExtrapolatedRPM = rpmFilter:process(rawExtrapolatedRPM)
 
-    local frontNdSlipAngleAbs = math.abs(vData.frontSlipDeg / frontPeakSlipAngle)
-    local rearNdSlipAngleAbs = math.abs(vData.rearSlipDeg / rearPeakSlipAngle)
+    local frontNdSlipAngleAbs = mathAbs(vData.frontSlipDeg / frontPeakSlipAngle)
+    local rearNdSlipAngleAbs = mathAbs(vData.rearSlipDeg / rearPeakSlipAngle)
     local drivenAxleSlipRatio = (vData.vehicle.tractionType == 1) and vData.frontSlipRatio or vData.rearSlipRatio
     local drivenAxlePeakSlipRatio = (vData.vehicle.tractionType == 1) and frontPeakSlipRatio or rearPeakSlipRatio
     local drivenAxleNdSlipAngleAbs = (vData.vehicle.tractionType == 1) and frontNdSlipAngleAbs or rearNdSlipAngleAbs
     local drivenAxleNdSlipRatio = drivenAxleSlipRatio / drivenAxlePeakSlipRatio
     local engagedGear = vData.vehicle.engagedGear
 
-    local canShift = (vData.vehiclePR.gForces.z > 0.005) and (vData.vehiclePR.gas > 0.01) and (math.abs(rAxleHVelAngleRaw) < 90.0) and (drivenAxleNdSlipRatio > 0.01 and drivenAxleNdSlipRatio < 1.5)
+    local canShift = (vData.vehiclePR.gForces.z > 0.005) and (vData.vehiclePR.gas > 0.01) and (mathAbs(rAxleHVelAngleRaw) < 90.0) and (drivenAxleNdSlipRatio > 0.01 and drivenAxleNdSlipRatio < 1.5)
 
     if (engagedGear ~= prevEngagedGear) or (not canShift) then
         shiftWarning = false
@@ -915,11 +1058,10 @@ local function processFFB(ffbValue, dt)
 
     prevEngagedGear = engagedGear
 
-    local sineVibrationExponent = 0.25
-
     if vibrationSource > 0 then
         local vibrationLevel = getConfigValue("vibrationLevel")
         local vibrationBaseFrequency = getConfigValue("vibrationBaseFrequency")
+        local sineVibrationExponent = mathMax(1e-6, (1.0 - getConfigValue("vibrationSharpness")) ^ 2.0)
 
         if vibrationSource == 5 then
 
@@ -946,27 +1088,29 @@ local function processFFB(ffbValue, dt)
         else
 
             local feedbackValue = 0.0
-            local feedbackRampBegin = 0.4
+            local feedbackFullRange = 0.0
+            local feedbackRampBegin = 0.5
             local feedbackRampEnd = 1.0
-            local feedbackBaseline = 0.35
+            local feedbackBrakeInputOffset = 0.1 -- used for an earlier or later warning than normal. positive is earlier
+            local feedbackBaseline = 0.3
             local frequencyRampEnd = 2.0
 
             local function getNdSlipRatioTarget(ndSlipAngleAbs, ndTarget)
-                return (1.0 - ((0.85 / ndTarget * lib.clamp01(ndSlipAngleAbs)) ^ 2.4)) * ndTarget
+                return (1.0 - ((0.85 / ndTarget * libClamp01(ndSlipAngleAbs)) ^ 2.4)) * ndTarget
                 -- return ndTarget
             end
 
             local function slipRatioFeedbackImpl(currentSlipRatio, peakSlipRatio, currentNdSlipAngleAbs)
                 -- return calcProgressiveFeedback(
                 --     currentSlipRatio,
-                --     peakSlipRatio * math.clamp(getNdSlipRatioTarget(currentNdSlipAngle, feedbackRampBegin), 0.5, 1.0),
-                --     peakSlipRatio * math.clamp(getNdSlipRatioTarget(currentNdSlipAngle, feedbackRampEnd), 0.5, 1.0),
+                --     peakSlipRatio * mathClamp(getNdSlipRatioTarget(currentNdSlipAngle, feedbackRampBegin), 0.5, 1.0),
+                --     peakSlipRatio * mathClamp(getNdSlipRatioTarget(currentNdSlipAngle, feedbackRampEnd), 0.5, 1.0),
                 --     feedbackBaseline
                 -- )
 
                 -- this version below is less accurate but its needed to keep the values sane for the feedback ramp
 
-                -- local peakUsed = math.lerp(getNdSlipRatioTarget(currentNdSlipAngleAbs, 1.0), 1.0, 0.5)
+                -- local peakUsed = mathLerp(getNdSlipRatioTarget(currentNdSlipAngleAbs, 1.0), 1.0, 0.5)
                 local peakUsed = getNdSlipRatioTarget(currentNdSlipAngleAbs * 0.75, 1.0)
                 local startMult = peakUsed * feedbackRampBegin
                 local endMult = peakUsed * feedbackRampEnd
@@ -981,40 +1125,42 @@ local function processFFB(ffbValue, dt)
 
             local function getBrakeHelpFeedback() -- only considers front wheels for now
                 if vData.vehiclePR.brake > 0.01 and vData.vehicle.absMode < 1 then
-                    return slipRatioFeedbackImpl(-vData.frontSlipRatio * math.sign(vData.localVel.z), frontPeakSlipRatio, frontNdSlipAngleAbs)
+                    local baseValue = -vData.frontSlipRatio * mathSign(vData.localVel.z)
+                    baseValue = baseValue + feedbackBrakeInputOffset * frontPeakSlipRatio
+                    return slipRatioFeedbackImpl(baseValue, frontPeakSlipRatio, frontNdSlipAngleAbs)
                 end
-                return 0.0
+                return 0.0, 0.0
             end
 
             local function getThrottleHelpFeedback()
                 local feedbackCooldownAfterShifting = 0.25
                 if vData.vehiclePR.gas > 0.01 and vData.vehicle.tractionControlMode < 1 and (now - lastEngagedGearChange) > feedbackCooldownAfterShifting then
-                    return slipRatioFeedbackImpl(drivenAxleSlipRatio * math.sign(engagedGear), drivenAxlePeakSlipRatio, drivenAxleNdSlipAngleAbs)
+                    return slipRatioFeedbackImpl(drivenAxleSlipRatio * mathSign(engagedGear), drivenAxlePeakSlipRatio, drivenAxleNdSlipAngleAbs)
                 end
 
-                return 0.0
+                return 0.0, 0.0
             end
 
             if vibrationSource == 1 then
                 -- braking help
-                feedbackValue = getBrakeHelpFeedback()
+                feedbackValue, feedbackFullRange = getBrakeHelpFeedback()
             elseif vibrationSource == 2 then
                 -- throttle help
-                feedbackValue = getThrottleHelpFeedback()
+                feedbackValue, feedbackFullRange = getThrottleHelpFeedback()
             elseif vibrationSource == 3 then
                 -- braking + throttle help
-                if drivenAxleSlipRatio * math.sign(engagedGear) < 0.0 then
-                    feedbackValue = getBrakeHelpFeedback()
+                if drivenAxleSlipRatio * mathSign(engagedGear) < 0.0 then
+                    feedbackValue, feedbackFullRange = getBrakeHelpFeedback()
                 else
-                    feedbackValue = getThrottleHelpFeedback()
+                    feedbackValue, feedbackFullRange = getThrottleHelpFeedback()
                 end
             elseif vibrationSource == 4 then
                 -- understeer
-                -- feedbackValue = math.smoothstep(math.lerpInvSat(math.abs(vData.frontSlipDeg) / frontPeakSlipAngle, 0.9, 1.4))
-                feedbackValue = calcProgressiveFeedback(math.abs(vData.frontSlipDeg), frontPeakSlipAngle * 0.95, frontPeakSlipAngle * 1.5, feedbackBaseline)
+                -- feedbackValue = mathSmoothstep(mathLerpInvSat(mathAbs(vData.frontSlipDeg) / frontPeakSlipAngle, 0.9, 1.4))
+                feedbackValue, feedbackFullRange = calcProgressiveFeedback(mathAbs(vData.frontSlipDeg), frontPeakSlipAngle * 0.95, frontPeakSlipAngle * 1.5, feedbackBaseline)
             end
 
-            local vibrationFrequency = lib.logInterpolation(vibrationBaseFrequency, vibrationBaseFrequency * frequencyRampEnd, (feedbackValue - feedbackBaseline) / (1.0 - feedbackBaseline))
+            local vibrationFrequency = libLogInterpolation(vibrationBaseFrequency, vibrationBaseFrequency * frequencyRampEnd, feedbackFullRange)
             local finalFeedback = vibrationFeedbackSmoother:getWithRate(feedbackValue, dt, vibrationFrequency * 1.5)
 
             ac.debug("Hap | vibration feedback raw", feedbackValue, 0.0, 1.0)
@@ -1022,7 +1168,7 @@ local function processFFB(ffbValue, dt)
 
             if feedbackValue > 0.01 then
                 vibrationPhase = (vibrationPhase + vibrationFrequency * dt) % 1.0
-                local vibrationAdditive = sineGenerator(vibrationPhase, sineVibrationExponent, true) * (ffbRefLevelVRef * dfMultAtRefSpeed) * feedbackValue * 1.5 * vibrationLevel
+                local vibrationAdditive = sineGenerator(vibrationPhase, sineVibrationExponent, true) * (ffbRefLevelVRef * dfMultAtRefSpeed) * feedbackValue * 1.5 * vibrationLevel -- the 1.5 is because feedbackValue can be <1 so it compensates for the average strength
                 finalFFB = finalFFB + vibrationAdditive * lowSpeedFade
             else
                 vibrationPhase = 0.0
@@ -1053,7 +1199,7 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
 
     runtimeData.appCanRun = true
 
-    if math.abs(dt - 0.003) > 1e-6 then
+    if mathAbs(dt - 0.003) > 1e-6 then
         ac.warn("Delta time is sus")
     end
 
@@ -1075,15 +1221,17 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
 
     if getConfigValue("scriptEnabled") then
         local success = false
-        success, finalFFB = pcall(function ()
-            return processFFB(ffbValue, dt)
-        end)
+        success, finalFFB = pcall(processFFB, ffbValue, dt)
 
         if not success then
             ac.error("Something exploded. This should stop in a second or so, otherwise something is up.")
 
             return ffbValue, ffbDamper
         end
+
+        finalFFB = libNumberGuard(finalFFB, ffbValue)
+
+        -- finalFFB = processFFB(ffbValue, dt)
     else
         onProcessingSkip(ffbValue, vehicle)
     end
@@ -1111,7 +1259,7 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
     end
 
 ---@diagnostic disable-next-line: cast-local-type
-    local postRaceFFBMultSmooth = math.lerp(1.0, getConfigValue("ffbLevelAfterFinish"), math.smoothstep(postRaceMultBlendSmoother:get((tSinceRaceFinished - 1.0) > 1e-6 and 1.0 or 0.0, dt)))
+    local postRaceFFBMultSmooth = mathLerp(1.0, getConfigValue("ffbLevelAfterFinish"), mathSmoothstep(postRaceMultBlendSmoother:get((tSinceRaceFinished - 1.0) > 1e-6 and 1.0 or 0.0, dt)))
 
     finalFFB = finalFFB * postRaceFFBMultSmooth
 
@@ -1119,7 +1267,7 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
 
     -- no more modifying ffb after this
 
-    local finalGuardedFFB = lib.numberGuard(finalFFB, ffbValue)
+    local finalGuardedFFB = libNumberGuard(finalFFB, ffbValue)
 
     ac.debug("Gen | final FFB", finalGuardedFFB, -1.0, 1.0)
 
@@ -1129,8 +1277,20 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
     ffbSampleCounter = ffbSampleCounter - 1
     if ffbSampleCounter <= 0 then
         ffbSampleCounter = storage.ffbSampleRateDiv
-        runtimeData.ffbRawHistoryHead, runtimeData.ffbRawHistoryCount = lib.StructValueHistory.push(runtimeData.ffbRawHistoryBuffer, storage.ffbHistoryBufferCapacity, runtimeData.ffbRawHistoryHead, runtimeData.ffbRawHistoryCount, ffbValue)
-        runtimeData.ffbFinalHistoryHead, runtimeData.ffbFinalHistoryCount = lib.StructValueHistory.push(runtimeData.ffbFinalHistoryBuffer, storage.ffbHistoryBufferCapacity, runtimeData.ffbFinalHistoryHead, runtimeData.ffbFinalHistoryCount, finalFFB)
+        runtimeData.ffbRawHistoryHead, runtimeData.ffbRawHistoryCount = libStructValueHistory.push(
+            runtimeData.ffbRawHistoryBuffer,
+            storage.ffbHistoryBufferCapacity,
+            runtimeData.ffbRawHistoryHead,
+            runtimeData.ffbRawHistoryCount,
+            ffbValue
+        )
+        runtimeData.ffbFinalHistoryHead, runtimeData.ffbFinalHistoryCount = libStructValueHistory.push(
+            runtimeData.ffbFinalHistoryBuffer,
+            storage.ffbHistoryBufferCapacity,
+            runtimeData.ffbFinalHistoryHead,
+            runtimeData.ffbFinalHistoryCount,
+            finalGuardedFFB
+        )
     end
 
     return finalGuardedFFB, ffbDamper -- what even is the damper in this context? its always 0 even with damping enabled in the ffb settings
