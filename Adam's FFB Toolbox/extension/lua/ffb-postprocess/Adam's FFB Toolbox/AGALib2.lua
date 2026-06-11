@@ -210,8 +210,8 @@ function M.isVec3Same(A, B, tolerance)
     return (math.abs(A.x - B.x) < tolerance) and (math.abs(A.y - B.y) < tolerance) and (math.abs(A.z - B.z) < tolerance)
 end
 
--- RunningAverage class
 
+-- RunningAverage class
 M.RunningAverage = {}
 
 function M.RunningAverage:new(length)
@@ -247,8 +247,8 @@ function M.RunningAverage:count()
     return #self.elements
 end
 
--- ValueLimits class
 
+-- ValueLimits class
 M.ValueLimitsBuffer = {}
 
 function M.ValueLimitsBuffer:new(length)
@@ -296,8 +296,8 @@ function M.ValueLimitsBuffer:count()
     return #self.elements
 end
 
--- PID controller class with a clamped output and anti-windup
 
+-- PID controller class with a clamped output and anti-windup
 M.PIDController = {}
 
 function M.PIDController:new(Kp, Ki, Kd, inverted, minOutput, maxOutput)
@@ -353,8 +353,8 @@ function M.PIDController:reset()
     self.prevError = 0
 end
 
--- SmoothTowards class (old shit version)
 
+-- SmoothTowards class (old shit version)
 -- M.SmoothTowardsOld = {}
 
 -- -- `speed` is automatically normalized to the range given by `minValue` and `maxValue`.
@@ -403,8 +403,8 @@ end
 --     self.state = self.startingValue
 -- end
 
--- SmoothTowards class
 
+-- SmoothTowards class (newer less shit version)
 M.SmoothTowards = {}
 
 function M.SmoothTowards:new(rate, linearity, minValue, maxValue, startingValue)
@@ -454,7 +454,6 @@ function M.SmoothTowards:reset()
 end
 
 -- Ring buffer
-
 M.ValueHistory = {}
 
 function M.ValueHistory:new(bufferCapacity)
@@ -508,7 +507,8 @@ function M.ValueHistory:clear()
 end
 
 
-M.StructValueHistory = {} -- intended to be used with ac.StructItem values external to this object
+-- Stateless ring buffer, the state has to be stored externally to the object
+M.StructValueHistory = {}
 
 ---@return integer capacity
 ---@return integer head

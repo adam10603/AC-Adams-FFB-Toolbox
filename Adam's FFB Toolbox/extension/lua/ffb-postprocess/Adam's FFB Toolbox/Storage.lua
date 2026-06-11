@@ -2,6 +2,10 @@ local json = require("json")
 
 local M = {}
 
+M.ffbHistoryBufferCapacity = 1000
+M.ffbSampleRateDiv = 1 -- divisor to the sampling rate of the ffb graph. 1 = 333hz, 2 = 167hz etc. this rate will also be the visual frame rate of the graph
+M.configVersion = 110
+
 M.generalConfig = {
     ac.StructItem.key("AFFBT_Data"),
     scriptEnabled = ac.StructItem.boolean(),
@@ -30,6 +34,9 @@ M.generalConfig = {
     vibrationSource = ac.StructItem.int32(), -- 0 = off, 1 = braking help, 2 = throttle help, 3 = braking + throttle help, 4 = understeer, 5 = gear shift warning
     vibrationLevel = ac.StructItem.float(),
     vibrationBaseFrequency = ac.StructItem.float(),
+    vibrationSharpness = ac.StructItem.float(),
+    roadTexture = ac.StructItem.float(),
+    roadTextureBypassFilter = ac.StructItem.boolean(),
     peakReduction = ac.StructItem.boolean(),
     ffbLevelAfterFinish = ac.StructItem.float()
 }
@@ -88,6 +95,12 @@ M.carSpecificConfig = {
     vibrationLevel = ac.StructItem.float(),
     OVERRIDE_vibrationBaseFrequency = ac.StructItem.boolean(),
     vibrationBaseFrequency = ac.StructItem.float(),
+    OVERRIDE_vibrationSharpness = ac.StructItem.boolean(),
+    vibrationSharpness = ac.StructItem.float(),
+    OVERRIDE_roadTexture = ac.StructItem.boolean(),
+    roadTexture = ac.StructItem.float(),
+    OVERRIDE_roadTextureBypassFilter = ac.StructItem.boolean(),
+    roadTextureBypassFilter = ac.StructItem.boolean(),
     OVERRIDE_peakReduction = ac.StructItem.boolean(),
     peakReduction = ac.StructItem.boolean(),
     OVERRIDE_ffbLevelAfterFinish = ac.StructItem.boolean(),
@@ -122,9 +135,25 @@ M.defaultSettings = {
     vibrationSource = 0,
     vibrationLevel = 0.0,
     vibrationBaseFrequency = 15.0,
+    vibrationSharpness = 0.5,
+    roadTexture = 0.0,
+    roadTextureBypassFilter = false,
     peakReduction = false,
     ffbLevelAfterFinish = 1.0
 }
+
+function M.versionMigration(parsedTable)
+    if parsedTable._version < 110 then
+        parsedTable.vibrationSharpness = M.defaultSettings.vibrationSharpness
+        parsedTable.roadTexture = M.defaultSettings.roadTexture
+        parsedTable.roadTextureBypassFilter = M.defaultSettings.roadTextureBypassFilter
+    end
+    return true
+end
+
+function M.versionStamp(outputTable)
+    outputTable._version = M.configVersion
+end
 
 M.defaultCarSpecificSettings = table.clone(M.defaultSettings, "full")
 
@@ -151,10 +180,6 @@ end
 for k, _ in pairs(M.defaultCarSpecificSettings) do
     table.insert(M.carSpecificConfigKeys, k)
 end
-
-M.ffbHistoryBufferCapacity = 1000
-M.ffbSampleRateDiv = 1 -- divisor to the sampling rate of the ffb graph. 1 = 333hz, 2 = 167hz etc. this rate will also be the visual frame rate of the graph
-M.configVersion = 100
 
 M.runtimeData = {
     ac.StructItem.key("AFFBT_RuntimeData"),
@@ -268,14 +293,6 @@ function M.writeFileThrottled(filePath, contentCallback, mode, forced)
     M._lastWrittenContent[filePath] = content
 
     return M.writeFile(filePath, content, mode)
-end
-
-function M.versionMigration(parsedTable)
-    return parsedTable._version == M.configVersion
-end
-
-function M.versionStamp(outputTable)
-    outputTable._version = M.configVersion
 end
 
 ---Parses and loads a JSON string into a settings table.

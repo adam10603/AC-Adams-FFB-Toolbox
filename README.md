@@ -1,6 +1,6 @@
 # Assetto Corsa: Adam's FFB Toolbox
 
-![Version](https://img.shields.io/badge/Version-1.0-blue.svg) ![Compatibility](https://img.shields.io/badge/CSP-0.2.11+-green.svg)
+![Version](https://img.shields.io/badge/Version-1.1-blue.svg) ![Compatibility](https://img.shields.io/badge/CSP-0.2.11+-green.svg)
 
 ![Banner](https://i.imgur.com/gPBsANw.jpeg)
 
@@ -18,7 +18,7 @@ The main features of this mod include:
  - Multiple effects to convey braking
  - Extra self-aligning torque to highlight understeer
  - Oversteer force effect
- - Various haptic vibration effects such as brake feedback, throttle feedback, gear shift warning etc.
+ - Various haptic effects such as brake feedback, throttle feedback, gear shift warning, road texture etc.
  - Safety features such as dampening collision forces
  - Global and per-car versions of each setting
  - Access to AC's own FFB settings from right within the app
