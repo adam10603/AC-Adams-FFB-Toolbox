@@ -66,8 +66,14 @@ local appConfig = ac.storage(table.clone(defaultAppConfig, "full"), "AFFBT_APP_"
 
 -- appConfig.graphWindowSize = graphWindowDefaultSize
 
+local cachedOverrideKeys = {} -- avoids string concatenations all the time
 local function getConfigValue(key) -- includes car overrides
-    if carSpecificConfig["OVERRIDE_" .. key] == true then
+    local overrideKey = cachedOverrideKeys[key]
+    if not overrideKey then
+        overrideKey = "OVERRIDE_" .. key
+        cachedOverrideKeys[key] = overrideKey
+    end
+    if carSpecificConfig[overrideKey] == true then
         return carSpecificConfig[key]
     end
 
@@ -1262,7 +1268,11 @@ function script.windowMain(dt)
                 showButton("Enable", false, nil, enableScript)
             end
             showDummyLine()
-            ui.textWrapped("If you can't enable it from here then something isn't working right. Try restarting the game, or double checking the instructions and re-installing the mod.")
+            ui.textWrapped("If you can't enable it from here then something isn't working. Try restarting AC and Content Manager, re-installing the mod, or checking the F.A.Q. page on Github for additional steps.")
+            showDummyLine()
+            if showButton("Open F.A.Q. page", false, nil) then
+                os.execute("start https://github.com/adam10603/AC-Adams-FFB-Toolbox/blob/release/FAQ.md")
+            end
         end
 
         return
