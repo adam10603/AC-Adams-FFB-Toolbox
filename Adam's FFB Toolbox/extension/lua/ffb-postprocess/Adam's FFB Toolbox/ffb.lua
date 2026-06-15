@@ -1212,11 +1212,6 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
 
     local vehicle = ac.getCar(0) or car
 
-    if ac.getCarSetupState() == "validating" or vehicle.isInPit then
-        resetInitValues()
-        return ffbValue, ffbDamper
-    end
-
     if initialSkips < 2 then -- not necessary anymore with pcall, but whatever
         initialSkips = initialSkips + 1
         return ffbValue, ffbDamper
@@ -1225,8 +1220,9 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
     ac.debug("Gen | original FFB", ffbValue, -1.0, 1.0)
 
     local finalFFB = ffbValue
+    local scriptEnabled = getConfigValue("scriptEnabled")
 
-    if getConfigValue("scriptEnabled") then
+    if scriptEnabled and not (ac.getCarSetupState() == "validating" or vehicle.isInPit) then -- sadly there is no good way to detect if the player is on the setup screen
         local success = false
         success, finalFFB = pcall(processFFB, ffbValue, dt)
 
@@ -1252,6 +1248,10 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
     -- ac.debug("sim.isSessionStarted", sim.isSessionStarted) -- false before the race start, then stays true after the lights go out until the next session
     -- ac.debug("sim.currentSessionIndex", sim.currentSessionIndex)
     -- ac.debug("sim.isOnlineRace", sim.isOnlineRace)
+    -- ac.debug("sim.sessionTimeLeft", sim.sessionTimeLeft)
+
+    -- post-race fade
+    -- this is outside the main ffb processing function because it needs to keep track of sessions, so it needs to run on every update
 
     if sim.isOnlineRace and sim.isSessionStarted and sim.raceSessionType == ac.SessionType.Race then
         if sim.raceFlagType == ac.FlagType.Finished and tSinceRaceFinished >= 0.0 then
@@ -1265,8 +1265,8 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
         tSinceRaceFinished = 0.0 -- reset this to 0 when a different session is detected
     end
 
----@diagnostic disable-next-line: cast-local-type
-    local postRaceFFBMultSmooth = mathLerp(1.0, getConfigValue("ffbLevelAfterFinish"), mathSmoothstep(postRaceMultBlendSmoother:get((tSinceRaceFinished - 1.0) > 1e-6 and 1.0 or 0.0, dt)))
+    local postRaceFFBMultRawBlend = (scriptEnabled and (tSinceRaceFinished - 1.0) > 1e-6) and 1.0 or 0.0
+    local postRaceFFBMultSmooth = mathLerp(1.0, getConfigValue("ffbLevelAfterFinish"), mathSmoothstep(postRaceMultBlendSmoother:get(postRaceFFBMultRawBlend, dt)))
 
     finalFFB = finalFFB * postRaceFFBMultSmooth
 
