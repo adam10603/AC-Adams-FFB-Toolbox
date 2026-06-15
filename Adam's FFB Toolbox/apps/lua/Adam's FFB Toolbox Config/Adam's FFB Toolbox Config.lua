@@ -8,25 +8,46 @@ if badModuleDirExists and not goodModuleDirExists then
     io.move(badModulePath, goodModulePath)
 elseif badModuleDirExists and goodModuleDirExists then
     local anyCopyFailed = false
+    local nFilesCopied = 0
     io.scanDir(badModulePath, nil, function (fileName, fileAttributes, callbackData)
         local badFilePath = badModulePath .. "\\" .. fileName
         local goodFilePath = goodModulePath .. "\\" .. fileName
         if not fileAttributes.isDirectory and (fileAttributes.creationTime > io.getAttributes(goodFilePath).creationTime) then
             if not io.move(badFilePath, goodFilePath, true) then
                 anyCopyFailed = true
+            else
+                nFilesCopied = nFilesCopied + 1
             end
         end
     end)
 
-    io.deleteDir(badModulePath)
+    io.deleteDir(badModulePath) -- this doesnt work because it wont be empty, but whatever
 
     if anyCopyFailed then
         ac.error("Plugin cant be updated, blame Ilja")
-        ac.setMessage("Adam's FFB Toolbox", "ERROR: Failed to update plugin. Check the F.A.Q. page for solutions.", 'illegal', 10.0)
+        ac.setMessage("Adam's FFB Toolbox", "ERROR: Failed to update plugin. Check the F.A.Q. page for solutions.", nil, 10.0)
     else
-        -- io.deleteDir(badModulePath)
-        ac.log("Plugin updated")
+        if nFilesCopied > 0 then
+            ac.log("Plugin updated")
+        end
     end
+end
+
+-- cross-checking versions just to be sure
+
+local function verifyVersion()
+    local appManifest = ac.INIConfig.load(ac.getFolder(ac.FolderID.ACAppsLua) .. "\\Adam's FFB Toolbox Config\\manifest.ini", ac.INIFormat.Extended)
+    local ffbModuleManifest = ac.INIConfig.load(goodModulePath .. "\\manifest.ini", ac.INIFormat.Extended)
+    if appManifest:get("ABOUT", "VERSION", "A") ~= ffbModuleManifest:get("ABOUT", "VERSION", "B") then
+        ac.setMessage("Adam's FFB Toolbox", "ERROR: module version mismatch! Try re-installing the mod or checking the F.A.Q. page for solutions.", nil, 10.0)
+        return false
+    end
+
+    return true
+end
+
+if not verifyVersion() then
+    return
 end
 
 -- ... onto the rest of the script
@@ -64,7 +85,7 @@ local defaultAppConfig = {
 
 local appConfig = ac.storage(table.clone(defaultAppConfig, "full"), "AFFBT_APP_")
 
--- appConfig.graphWindowSize = graphWindowDefaultSize
+-- appConfig.graphWindowSize = defaultAppConfig.graphWindowSize
 
 local cachedOverrideKeys = {} -- avoids string concatenations all the time
 local function getConfigValue(key) -- includes car overrides
@@ -189,6 +210,7 @@ end)
 local tooltips = {
     scriptEnabled = "Toggles all FFB processing by this plugin.\nTurning this off leaves the FFB signal unchanged.",
     factoryReset = "Resets all settings to default and removes every per-car config, but keeps your presets.\n\nClick twice to confirm!",
+    resetAllCarSettings = "Removes all the car-specific overrides from this car.",
     resetCarSetting = "Removes the car-specific override from this setting.",
     autoAdjustGain = "Automatically sets your per-car FFB gain to the recommended value below.\n\nThe recommended gain will bring the car's actual FFB level in line with your global FFB gain setting.\n\nThis makes the FFB strength feel more consistent across different cars.\n\nWARNING: Avoid using other auto-gain apps when this setting is active, they might conflict with each other.",
     autoGainOffset = "Changes the level that the automatic gain targets.",
@@ -199,7 +221,7 @@ local tooltips = {
     downforceCompPercentage = "How much of the car's downforce you want to feel.\n\n100% = no change, all downforce is felt normally.\n\n0% = all downforce feel is removed, which makes the FFB strength equal at low and high speeds.",
     downforceCompDynamicRange = "The maximum dynamic range* you wish to feel.\n\nCars with less dynamic range than this won't be affected. Cars with more dynamic range than this will have their downforce feel scaled down to match this level.\n\nSet this to a level that you and your wheelbase are OK with, and any car you drive will be adjusted automatically without needing car-specific settings.\n\nFor example if you set this to 0.7 (roughly GT3 level of downforce) then road cars with less aero will be unchanged, but an F1 car will feel as if it only had the downforce of a GT3 car.\n\n*: \"Dynamic range\" is a metric calculated per-car based on the downforce level at top speed. GT3 cars are around 0.7, and F1 cars are around 2.5.",
     downforceCompMakeupGain = "If you reduce downforce in your FFB, this setting will compensate by increasing the overall FFB level accordingly.\n\nThis makes it so the FFB strength at ≈70% of the car's top speed will stay consistent regardless of the downforce settings above.",
-    brakeFeel = "Makes the FFB stronger proportional to the braking done by the front wheels.\n\nThis provides additional brake feedback by letting you feel the braking force through your wheel.\n\nCan be especially useful in cars with no ABS.\n\nIt is recommended to also use the lockup feel setting together with this one.",
+    brakeFeel = "Makes the FFB stronger proportional to the braking done by the front wheels.\n\nThis provides additional brake feedback by letting you feel the braking force through your wheel.\n\nCan be especially useful in cars with no ABS.\n\nThe strength of this effect is already relative to the FFB strength of the car, so tweaking the effect per-car usually isn't needed.\n\nIt is recommended to also use the lockup feel setting together with this one.",
     brakeFeelWithABS = "Disables the brake feel effect when ABS is present.", -- inverted on ui
     brakeFeelFilter = "Applies a small amount of filtering only to the additional force from the brake feel effect.\n\nNormally the brake feel effect can amplify the feeling of bumps, curbs and other vibrations while braking, which this setting helps to reduce.",
     brakeFeelExponent = "Changes the response curve of the brake feel setting.\n\nUnder 1.0 = the brake feel comes in sooner, but changes less near the maximum.\n\n1.0 = linear response.\n\nOver 1.0 = the brake feel comes in slower at first, but changes faster near the maximum. This can give a more obvious feel in the zone where lockups can happen.",
@@ -209,7 +231,7 @@ local tooltips = {
     extraSAT = "Adds extra self-aligning torque (SAT) to the FFB.\n\nSAT is the part of the FFB that makes the initial force stronger when turning in, then reduce as you steer more and reach the grip limit of the tires.\n\nThis setting will add additional SAT on top of the amount already in the FFB, making it easier to feel the grip limit of the tires and to feel understeer.\n\nThis can be especially useful in cars with a high caster angle.",
     extraSATSuspensionCompensation = "The amount of extra SAT will be scaled according to the car's suspension geometry.\n\nIf a car has weak SAT by default then the added amount will be higher. If a car already has a strong SAT feeling then the added amount will be much less.\n\nThis means the extra SAT you add will feel more consistent across different cars.",
     extraSATMakeupGain = "If you add extra SAT to the FFB, this setting will compensate by decreasing the overall FFB level accordingly.\n\nThis basically turns the extra SAT into something similar to AC's understeer effect.",
-    oversteerFeel = "Makes your wheel pull stronger in the countersteer direction when the car slides / oversteers.",
+    oversteerFeel = "Makes your wheel pull stronger in the countersteer direction when the car slides / oversteers.\n\nThe strength of this effect is already relative to the FFB strength of the car, so tweaking the effect per-car usually isn't needed.",
     oversteerFeelAggression = "Determines how large a slide has to be for the oversteer effect to kick in.\n\nLower = the effect already engages in a shallow slide.\n\nHigher = a bigger slide is needed to trigger the effect.",
     oversteerFeelMakeupGain = "If you add extra oversteer force, this setting will compensate by decreasing the overall FFB level accordingly.",
     vibrationSource = "Selects what triggers the vibration effect.\n\nBraking help = progressive vibration during braking when there's no ABS. Starts lighter then gets stronger as you approach the point of locking up.\n\nThrottle help = progressive vibration during acceleration when there's no TCS. Starts lighter then gets stronger as you approach the point of wheelspin.\n\nBraking + throttle help = both of the above, depending on whether you're braking or accelerating.\n\nUndersteer = progressive vibration to warn if you're steering too much. This one starts right around the grip limit and gets stronger the more you push into understeer.\n\nGear shift warning = vibration to signal the need to shift up. This is calculated from the engine's power curve and gear ratios, or if those are unavailable then the car's default shifting point is used. The vibration warning is timed in a way that accounts for reaction time, so you'll shift at the correct point by just reacting to it without having to anticipate it.\n\nFor best results AC's own slip effect should be turned off to avoid it conflicting with this vibration effect.",
@@ -217,7 +239,7 @@ local tooltips = {
     vibrationBaseFrequency = "The frequency of the vibration effect.\n\nThe actual frequency of the vibration output might be modulated further depending on the vibration source, but this setting is always used as the baseline.",
     vibrationSharpness = "Changes the texture / feel of the vibration.\n\n0% = pure sine wave, the smoothest feel.\n\n100% = square wave, feels much sharper.",
     roadTexture = "Adds the feeling of road texture to the FFB. This can add some immersion on smooth tracks.\n\nThe effect changes dynamically with speed, tire load, tire slip and surface type.",
-    roadTextureBypassFilter = "When enabled, it allows the road texture effect to bypass the general filter.\n\nThis means that even when you use the general FFB filter setting, the road texture setting will remain feeling sharp.\n\nWhen disabled, the general filter will smooth out the added road texture effect too.",
+    roadTextureBypassFilter = "When enabled, it allows the road texture effect to bypass the general filter.\n\nThis means that even when you use the general FFB filter setting, the road texture setting will remain feeling sharp.\n\nWhen disabled, the general filter will smooth out the added road texture effect too.\n\nIf you don't use the general filter setting then this won't do anything.",
     peakReduction = "Temporarily filters out sudden peaks from the FFB when a collision is detected.\n\nThis helps to avoid unpleasant or dangerous jolts in your wheel when hitting a wall or another car.",
     ffbLevelAfterFinish = "When you finish a race and get the checkered flag, your FFB strength will be reduced to this level. Upon returning to the pits your FFB will be restored to normal.\n\nThis is for preventing your wheel from going crazy if another car decides to hit you after the race ends, as they sometimes do.\n\n100% = no change.\n\nUnder 100% = reduced FFB post-race (until pitting).",
     fixExtraSettings = "", -- added dynamically in code
@@ -245,7 +267,7 @@ local sliderRightPadding = sectionPadding + 21
 
 local black                = rgbm(0.0, 0.0, 0.0, 1.0)
 local white                = rgbm(1.0, 1.0, 1.0, 1.0)
-local gray                 = rgbm(0.5, 0.5, 0.5, 1.0)
+local gray                 = rgbm(0.65, 0.65, 0.65, 1.0)
 local controlHoverColor    = rgbm(0.5, 0.5, 0.5, 1.0)
 local controlAccentColor   = rgbm(59/255, 159/255, 255/255, 1)
 local controlActiveColor   = rgbm(59/255, 159/255, 255/255, 0.4)
@@ -457,6 +479,14 @@ local function loadDefaultSettings()
     end)
 end
 
+local function resetCarOverrides()
+    pcall(function ()
+        for k, v in pairs(storage.defaultCarSpecificSettings) do
+            carSpecificConfig[k] = v
+        end
+    end)
+end
+
 local function factoryReset()
     loadDefaultSettings()
 
@@ -597,6 +627,7 @@ local function overridableItemWrapper(perCarTab, cfgKey, drawItemCallback)
         ret = overrideActive
         if overrideActive then
             textColor = white
+            ui.setNextTextBold()
         else
             textColor = gray
             carSpecificConfig[cfgKey] = generalConfig[cfgKey] -- the actual ffb script doesnt depend on these being set to the global values if theres no override, this is just so the values on the ui make sense
@@ -803,6 +834,13 @@ end
 -- end
 
 local function drawCompleteSettingsPage(perCarTab)
+    if perCarTab then
+        if showButton("Reset all overrides for this car", false, "resetAllCarSettings", nil, nil, 0) then
+            resetCarOverrides()
+        end
+        showDummyLine(0.5)
+    end
+
     overridableItemWrapper(perCarTab, "scriptEnabled", function(textColor)
         showCheckbox(generalConfig, "scriptEnabled", "Enable FFB processing", false, false, textColor, 0)
     end)

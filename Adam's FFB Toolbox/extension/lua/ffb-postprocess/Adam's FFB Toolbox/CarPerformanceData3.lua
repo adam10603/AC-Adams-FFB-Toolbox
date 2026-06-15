@@ -616,10 +616,9 @@ local peakCorneringWeightShift = 1.7
 local peakSATWeightShift = 1.6
 
 -- ---Returns the expected peak
--- ---@param staticTireRadius number Front tire radius (static)
 -- ---@param ffbBase number vehicle.ffbBase
 -- ---@return number FFBPeakEstimate Estimated peak FFB strength before being multiplied by either the global FFB gain or the per-car FFB gain.
--- function M:getFFBPeakStrengthEstimateCurrent(staticTireRadius, ffbBase)
+-- function M:getFFBPeakStrengthEstimateCurrent(ffbBase)
 --     local mz = (self.vehicle.wheels[0].mz + self.vehicle.wheels[1].mz)
 --     local load1 = self.vehicle.wheels[0].load
 --     local load2 = self.vehicle.wheels[1].load
@@ -812,7 +811,9 @@ function M:getDownforceMaxDynamicRange()
 end
 
 function M:getSteerAssistValue()
-    return self.hasSteerAssistSetup and 1.0 or self.steerAssist -- // TODO is this right?
+    -- (ac.INIConfig.currentSetup():get("STEER_ASSIST", "VALUE", 100.0) / 100.0)
+    -- this could be used instead of a 1.0 fallback, but it still doesnt include unsaved changes that werent loaded from a setup, very cool
+    return self.hasSteerAssistSetup and 1.0 or self.steerAssist
 end
 
 function M:getFrontTireLoadAtRest(wheelbase, rearAxleZ)
