@@ -633,15 +633,21 @@ local function processFFB(ffbValue, dt)
     end
 
     local ffbBaseStrengthVRef = getFFBBaseStrength()
-    local ffbRefLevelVRef = ffbBaseStrengthVRef * ac.getFFBGain() -- signed
+    local ffbRefLevelVRef = ffbBaseStrengthVRef * ac.getFFBGain() -- includes inversion sign
     local ffbBaseStrengthVDynamic = getFFBBaseStrength(frontWheelLoadAtCurrentSpeed, mzEstimateAtCurrentSpeed)
-    local ffbRefLevelVDynamic = ffbBaseStrengthVDynamic * ac.getFFBGain() -- signed
+    local ffbRefLevelVDynamic = ffbBaseStrengthVDynamic * ac.getFFBGain() -- includes inversion sign
 
     local rAxleHVelAngle = libNumberGuard(mathDeg(mathAtan2(vData.rAxleLocalVel.x, mathAbs(vData.rAxleLocalVel.z)))) -- reflected at 90 degrees
     local rAxleHVelAngleRaw = libNumberGuard(mathDeg(mathAtan2(vData.rAxleLocalVel.x, vData.rAxleLocalVel.z))) -- -180 to 180
 
-    ac.debug("Gen | FFB est at vRef", ffbRefLevelVRef, -1.0, 1.0)
-    -- local currentEstFFB = vData.perfData:getFFBPeakStrengthEstimateCurrent(vData.vehicle.wheels[1].tyreRadius, vData.vehicle.ffbBase) * ac.getFFBGain()
+    -- ac.debug("Gen | FFB est at vRef", ffbRefLevelVRef, -1.0, 1.0)
+
+    -- local currentEstFFB = vData.perfData:getFFBPeakStrengthEstimateCurrent(vData.vehicle.ffbBase) * ac.getFFBGain()
+    -- ac.debug("current est ffb", currentEstFFB, -1.0, 1.0)
+    -- local frontSlipAngleNdAbs = mathAbs(vData.frontSlipDeg / frontPeakSlipAngle)
+    -- if frontSlipAngleNdAbs > 0.35 and frontSlipAngleNdAbs < 0.45 and (vData.vehiclePR.wheels[0].load + vData.vehiclePR.wheels[1].load) > (frontWheelLoadAtCurrentSpeed * 2.0 * 0.5) and vData.vehiclePR.wheels[0].load > 0.0 and vData.vehiclePR.wheels[1].load > 0.0 and mathAbs(currentEstFFB) > 0.01 then
+    --     ac.debug("ffb est ratio", mathAbs(ffbRefLevelVDynamic) / mathAbs(currentEstFFB))
+    -- end
 
     local finalFFB = ffbValue
 
@@ -748,7 +754,8 @@ local function processFFB(ffbValue, dt)
 
         local fDownforceMult = 0.27 * 2.0 -- // TODO figure this out
 
-        local steerAssist = vData.perfData:getSteerAssistValue()
+        local steerAssist = vData.perfData:getSteerAssistValue() -- sadly i cant get steer assist values from the setup screen, very cool
+        ac.debug("DF Comp | steer assist", steerAssist)
 
         local dfDynamicRange = vData.perfData:getDownforceMaxDynamicRange()
 
@@ -764,10 +771,10 @@ local function processFFB(ffbValue, dt)
 
         runtimeData.downforceDynamicRange = mathMax(0.0, dfDynamicRange)
 
-        local standstillLoadFactor = (frontWheelLoadAtRest / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
-        local currentLoadFactor = ((vData.perfData.fAxleDownforce * fDownforceMult + frontWheelLoadAtRest) / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
+        local standstillLoadFactor = (frontWheelLoadAtRest / vData.perfData.frontFZ0) ^ steerAssist
+        local currentLoadFactor = ((vData.perfData.fAxleDownforce * fDownforceMult + frontWheelLoadAtRest) / vData.perfData.frontFZ0) ^ steerAssist
         local ret = mathLerp(1.0 / (currentLoadFactor / standstillLoadFactor), 1.0, downforceEffect)
-        local midSpeedLoadFactor = (frontWheelLoadAt70PercentSpeed / vData.perfData.frontFZ0) ^ (1.0 / steerAssist)
+        local midSpeedLoadFactor = (frontWheelLoadAt70PercentSpeed / vData.perfData.frontFZ0) ^ steerAssist
         local multAtVRef = mathLerp(1.0 / (midSpeedLoadFactor / standstillLoadFactor), 1.0, downforceEffect)
         local makeupGain = 1.0
 

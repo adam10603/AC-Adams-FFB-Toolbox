@@ -1,12 +1,12 @@
 # Assetto Corsa: Adam's FFB Toolbox
 
-![Version](https://img.shields.io/badge/Version-1.1-blue.svg) ![Compatibility](https://img.shields.io/badge/CSP-0.2.11+-green.svg)
+![Version](https://img.shields.io/badge/Version-1.1.1-blue.svg) ![Compatibility](https://img.shields.io/badge/CSP-0.2.11+-green.svg)
 
 ![Banner](https://i.imgur.com/gPBsANw.jpeg)
 
 ## 🖊️ Description
 
-This is a mod for Assetto Corsa that provides highly customizable force-feedback effects and enhancements. It works through an in-game UI app where players can customize various aspects of their FFB.
+This is a mod for Assetto Corsa that provides highly customizable force-feedback effects and enhancements. It works through an in-game UI app where you can customize different aspects of your FFB.
 
 This is not a complete FFB replacement, but instead it uses AC's FFB as a baseline and just adds a number of optional tweaks and effects on top.
 
@@ -28,7 +28,7 @@ The main features of this mod include:
 
 AC already has one of the best force-feedback experiences of any simulator. The FFB it provides is very dynamic, direct and descriptive of the car which enables a level of reactive driving that some other sims don't really support. This is why I wanted to keep AC's own FFB as a baseline, and just add some useful options on top to convey even more information about the state of the car, or just make life easier in some ways.
 
-Also, this mod was NOT developed by AI unlike some other FFB apps. I'd rather not accelerate global warming and enrich idiotic tech billionaires even further all just to have an AI unleash some hallucinated slop code on the world. If you think that's how things should be developed then I sincerely hope you sit on a cactus.
+Also, this mod was NOT developed by AI unlike some other FFB apps. I'd rather not accelerate global warming and enrich idiotic tech billionaires even further all just to have an AI agent unleash some hallucinated slop code on the world in my name. If you think that's how things should be developed then I sincerely hope you sit on a cactus.
 
 ## 🖥️ Installation
 
