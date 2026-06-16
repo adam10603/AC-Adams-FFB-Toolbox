@@ -624,6 +624,10 @@ local function processFFB(ffbValue, dt)
     -- ac.debug("f fz0", vData.perfData.frontFZ0)
     -- ac.debug("f axis dot", vData.perfData.steerBasisAxis:dot(vec3(0, 1, 0)))
 
+    -- ac.debug("W1 FX", vData.vehiclePR.wheels[1].fy)
+    -- ac.debug("W1 FX est", vData.perfData:getFrontPeakLateralForceEst(vData.vehiclePR.wheels[1].load))
+    -- ac.debug("max rpm", vData.perfData.maxRPM)
+
     -- ac.debug("DATA", string.format("%.1f\t%.1f\t%.1f\t%.1f\t%.0f\t%.4f\t%.4f", mathAbs(vData.vehiclePR.wheels[1].fy), mathAbs(vData.vehiclePR.wheels[1].mz), vData.vehiclePR.wheels[1].load, vData.perfData.frontFZ0, vData.perfData.frontTireRate, vData.perfData.steerBasisAxis:dot(vec3(0, 1, 0)), vData.vehicle.wheels[1].tyreRadius))
 
     local function getFFBBaseStrength(load, mz)
@@ -645,7 +649,7 @@ local function processFFB(ffbValue, dt)
     -- local currentEstFFB = vData.perfData:getFFBPeakStrengthEstimateCurrent(vData.vehicle.ffbBase) * ac.getFFBGain()
     -- ac.debug("current est ffb", currentEstFFB, -1.0, 1.0)
     -- local frontSlipAngleNdAbs = mathAbs(vData.frontSlipDeg / frontPeakSlipAngle)
-    -- if frontSlipAngleNdAbs > 0.35 and frontSlipAngleNdAbs < 0.45 and (vData.vehiclePR.wheels[0].load + vData.vehiclePR.wheels[1].load) > (frontWheelLoadAtCurrentSpeed * 2.0 * 0.5) and vData.vehiclePR.wheels[0].load > 0.0 and vData.vehiclePR.wheels[1].load > 0.0 and mathAbs(currentEstFFB) > 0.01 then
+    -- if frontSlipAngleNdAbs > 0.35 and frontSlipAngleNdAbs < 0.45 and (vData.vehiclePR.wheels[0].load + vData.vehiclePR.wheels[1].load) > (frontWheelLoadAtCurrentSpeed * 2.0 * 0.5) and vData.vehiclePR.wheels[0].load > 0.0 and vData.vehiclePR.wheels[1].load > 0.0 and mathAbs(currentEstFFB) > 0.01 and vData.vehiclePR.wheels[0].surfaceExtendedType == ac.SurfaceExtendedType.Base and vData.vehiclePR.wheels[1].surfaceExtendedType == ac.SurfaceExtendedType.Base then
     --     ac.debug("ffb est ratio", mathAbs(ffbRefLevelVDynamic) / mathAbs(currentEstFFB))
     -- end
 

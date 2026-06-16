@@ -1,6 +1,6 @@
 # Assetto Corsa: Adam's FFB Toolbox
 
-![Version](https://img.shields.io/badge/Version-1.1.1-blue.svg) ![Compatibility](https://img.shields.io/badge/CSP-0.2.11+-green.svg)
+![Version](https://img.shields.io/badge/Version-1.1.2-blue.svg) ![Compatibility](https://img.shields.io/badge/CSP-0.2.11+-green.svg)
 
 ![Banner](https://i.imgur.com/gPBsANw.jpeg)
 

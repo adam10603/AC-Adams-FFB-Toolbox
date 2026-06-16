@@ -171,8 +171,8 @@ function M:new(vehicle, cPhys)
         dfDynamicRange1         = 0.0,
         dfDynamicRange2         = 0.0,
         fAxleDownforce          = 0.0,
-        tmpWbTop                = nil,
-        tmpWbBottom             = nil,
+        -- tmpWbTop                = nil,
+        -- tmpWbBottom             = nil,
         lastWingAngles          = {}
     }, self)
 
@@ -241,8 +241,8 @@ function M:new(vehicle, cPhys)
         obj.steerBasisCenter:set(carStrut):add(tireStrut):scale(0.5)
         obj.steerBasisAxis:set(carStrut):sub(tireStrut):normalize()
 
-        obj.tmpWbTop = carStrut
-        obj.tmpWbBottom = tireStrut
+        -- obj.tmpWbTop = carStrut
+        -- obj.tmpWbBottom = tireStrut
     elseif obj.frontSuspensionType == "DWB" then
         local wbTop = suspensionsIni:get("FRONT", "WBTYRE_TOP", vec3(0.0, 0.1 * 0.996194698092, -0.1 * 0.0871557427477))
         local wbBottom = suspensionsIni:get("FRONT", "WBTYRE_BOTTOM", vec3(0.0, -0.1 * 0.996194698092, 0.1 * 0.0871557427477))
@@ -252,8 +252,8 @@ function M:new(vehicle, cPhys)
         obj.steerBasisCenter:set(wbTop):add(wbBottom):scale(0.5)
         obj.steerBasisAxis:set(wbTop):sub(wbBottom):normalize()
 
-        obj.tmpWbTop = wbTop
-        obj.tmpWbBottom = wbBottom
+        -- obj.tmpWbTop = wbTop
+        -- obj.tmpWbBottom = wbBottom
     else
         ac.error("Invalid front suspension type! Reverting to default values ...")
     end
@@ -595,15 +595,6 @@ local function getContactPatchLengthEstimateImpl(load, staticWheelRadius, tireRa
     return math.sqrt((staticWheelRadius * staticWheelRadius) - (v * v)) * 2.0
 end
 
--- local function getContactPatchLengthEstimateImpl(load, staticWheelRadius, tireRate)
---     if load <= 0.0 then
---         return 0.0
---     end
---     staticWheelRadius = staticWheelRadius
---     local v = load / tireRate
---     return math.sqrt((staticWheelRadius * staticWheelRadius) - (v * v)) * 2.0
--- end
-
 function M:getFrontContactPatchLengthEstimate(load, staticWheelRadius)
     return getContactPatchLengthEstimateImpl(load, staticWheelRadius, self.frontTireRate)
 end
@@ -615,31 +606,31 @@ end
 local peakCorneringWeightShift = 1.7
 local peakSATWeightShift = 1.6
 
--- ---Returns the expected peak
--- ---@param ffbBase number vehicle.ffbBase
--- ---@return number FFBPeakEstimate Estimated peak FFB strength before being multiplied by either the global FFB gain or the per-car FFB gain.
--- function M:getFFBPeakStrengthEstimateCurrent(ffbBase)
---     local mz = (self.vehicle.wheels[0].mz + self.vehicle.wheels[1].mz)
---     local load1 = self.vehicle.wheels[0].load
---     local load2 = self.vehicle.wheels[1].load
---     local lateralForce1 = self.vehicle.wheels[0].fy
---     local lateralForce2 = self.vehicle.wheels[1].fy
---     local loadedRadius1 = self.vehicle.wheels[0].tyreLoadedRadius
---     local loadedRadius2 = self.vehicle.wheels[1].tyreLoadedRadius
---     local totalContactForce = vec3()
---     tmpVec2:set(lateralForce1, load1, 0.0)
---     tmpVec1:set(0.0, -loadedRadius1, 0.0):sub(self.steerBasisCenter):cross(tmpVec2)
---     totalContactForce:add(tmpVec1)
---     tmpVec2:set(-lateralForce2, load2, 0.0)
---     tmpVec1:set(0.0, -loadedRadius2, 0.0):sub(self.steerBasisCenter):cross(tmpVec2):scale(-1.0)
---     totalContactForce:add(tmpVec1)
---     local steerAxisTorque = self.steerBasisAxis:dot(totalContactForce)
---     local mzMult = self.steerBasisAxis:dot(tmpVec1:set(0.0, 1.0, 0.0))
---     steerAxisTorque = steerAxisTorque + mz * mzMult
---     steerAxisTorque = steerAxisTorque * 0.75
---     local ffbStrength = steerAxisTorque / 600.0 * ffbBase
---     return ffbStrength
--- end
+---Returns the expected peak
+---@param ffbBase number vehicle.ffbBase
+---@return number FFBPeakEstimate Estimated peak FFB strength before being multiplied by either the global FFB gain or the per-car FFB gain.
+function M:getFFBPeakStrengthEstimateCurrent(ffbBase)
+    local mz = (self.vehicle.wheels[0].mz + self.vehicle.wheels[1].mz)
+    local load1 = self.vehicle.wheels[0].load
+    local load2 = self.vehicle.wheels[1].load
+    local lateralForce1 = self.vehicle.wheels[0].fy
+    local lateralForce2 = self.vehicle.wheels[1].fy
+    local loadedRadius1 = self.vehicle.wheels[0].tyreLoadedRadius
+    local loadedRadius2 = self.vehicle.wheels[1].tyreLoadedRadius
+    local totalContactForce = vec3()
+    tmpVec2:set(lateralForce1, load1, 0.0)
+    tmpVec1:set(0.0, -loadedRadius1, 0.0):sub(self.steerBasisCenter):cross(tmpVec2)
+    totalContactForce:add(tmpVec1)
+    tmpVec2:set(-lateralForce2, load2, 0.0)
+    tmpVec1:set(0.0, -loadedRadius2, 0.0):sub(self.steerBasisCenter):cross(tmpVec2):scale(-1.0)
+    totalContactForce:add(tmpVec1)
+    local steerAxisTorque = self.steerBasisAxis:dot(totalContactForce)
+    local mzMult = self.steerBasisAxis:dot(tmpVec1:set(0.0, 1.0, 0.0))
+    steerAxisTorque = steerAxisTorque + mz * mzMult
+    steerAxisTorque = steerAxisTorque * 0.75
+    local ffbStrength = steerAxisTorque / 600.0 * ffbBase
+    return ffbStrength
+end
 
 ---Returns the expected peak
 ---@param avgWheelLoad number Per-wheel load in N
@@ -670,11 +661,13 @@ function M:getFFBPeakStrengthEstimate(avgWheelLoad, staticTireRadius, ffbBase, m
 end
 
 function M:getMzRatioInFFB(avgWheelLoad, staticTireRadius, mz)
-    mz = mz or self:getMzEstimate(avgWheelLoad, staticTireRadius)
     local load1 = avgWheelLoad * peakSATWeightShift
     local load2 = avgWheelLoad * (2.0 - peakSATWeightShift)
-    local lateralForce1 = self:getFrontPeakLateralForceEst(load1) * 0.78
-    local lateralForce2 = self:getFrontPeakLateralForceEst(load2) * 0.78 * 0.95
+    local lateralForce1Raw = self:getFrontPeakLateralForceEst(load1)
+    local lateralForce2Raw = self:getFrontPeakLateralForceEst(load2)
+    local lateralForce1 = lateralForce1Raw * 0.78
+    local lateralForce2 = lateralForce2Raw * 0.78 * 0.95
+    mz = mz or self:getMzEstimate(avgWheelLoad, staticTireRadius, lateralForce1Raw, lateralForce2Raw)
     local loadedRadius1 = staticTireRadius - load1 / self.frontTireRate
     local loadedRadius2 = staticTireRadius - load2 / self.frontTireRate
     local totalContactForce = vec3()
@@ -704,8 +697,30 @@ function M:getSteeringRackTorqueFromFrontMz(wheel0Mz, wheel1Mz, wheel0Normal, wh
     return steeringRackTorque
 end
 
+---For the whole front axle under cornering, but not compensated for suspension geometry yet. In Nm.
+---@param avgWheelLoad number
+---@param staticTireRadius number
+---@param fy1AtPeakSATWeightShift? number
+---@param fy2AtPeakSATWeightShift? number
+---@return number
+function M:getMzEstimate(avgWheelLoad, staticTireRadius, fy1AtPeakSATWeightShift, fy2AtPeakSATWeightShift)
+    local loadMz1 = avgWheelLoad * peakSATWeightShift
+    local loadMz2 = avgWheelLoad * (2.0 - peakSATWeightShift)
+
+    local cpLen1 = self:getFrontContactPatchLengthEstimate(loadMz1, staticTireRadius)
+    local cpLen2 = self:getFrontContactPatchLengthEstimate(loadMz2, staticTireRadius)
+
+    fy1AtPeakSATWeightShift = fy1AtPeakSATWeightShift or self:getFrontPeakLateralForceEst(loadMz1)
+    fy2AtPeakSATWeightShift = fy2AtPeakSATWeightShift or self:getFrontPeakLateralForceEst(loadMz2)
+
+    local mz1 = fy1AtPeakSATWeightShift * 0.78 * cpLen1 / 1.45 * 0.11
+    local mz2 = fy2AtPeakSATWeightShift * 0.78 * cpLen2 / 1.45 * 0.11
+
+    return (mz1 + mz2)
+end
+
 -- For the whole front axle under cornering, but not compensated for suspension geometry yet. In Nm.
-function M:getMzEstimate(avgWheelLoad, staticTireRadius)
+function M:getMzEstimateOld(avgWheelLoad, staticTireRadius)
     local loadMz1 = avgWheelLoad * peakSATWeightShift
     local loadMz2 = avgWheelLoad * (2.0 - peakSATWeightShift)
 
