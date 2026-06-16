@@ -1269,8 +1269,9 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
         tSinceRaceFinished = 0.0 -- reset this to 0 when a different session is detected
     end
 
-    local postRaceFFBMultRawBlend = (scriptEnabled and (tSinceRaceFinished - 1.0) > 1e-6) and 1.0 or 0.0
+    local postRaceFFBMultRawBlend = ((tSinceRaceFinished - 1.0) > 1e-6) and 1.0 or 0.0
     local postRaceFFBMultSmooth = mathLerp(1.0, getConfigValue("ffbLevelAfterFinish"), mathSmoothstep(postRaceMultBlendSmoother:get(postRaceFFBMultRawBlend, dt)))
+    postRaceFFBMultSmooth = scriptEnabled and postRaceFFBMultSmooth or 1.0
 
     finalFFB = finalFFB * postRaceFFBMultSmooth
 
