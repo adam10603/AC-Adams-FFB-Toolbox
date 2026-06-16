@@ -606,31 +606,31 @@ end
 local peakCorneringWeightShift = 1.7
 local peakSATWeightShift = 1.6
 
----Returns the expected peak
----@param ffbBase number vehicle.ffbBase
----@return number FFBPeakEstimate Estimated peak FFB strength before being multiplied by either the global FFB gain or the per-car FFB gain.
-function M:getFFBPeakStrengthEstimateCurrent(ffbBase)
-    local mz = (self.vehicle.wheels[0].mz + self.vehicle.wheels[1].mz)
-    local load1 = self.vehicle.wheels[0].load
-    local load2 = self.vehicle.wheels[1].load
-    local lateralForce1 = self.vehicle.wheels[0].fy
-    local lateralForce2 = self.vehicle.wheels[1].fy
-    local loadedRadius1 = self.vehicle.wheels[0].tyreLoadedRadius
-    local loadedRadius2 = self.vehicle.wheels[1].tyreLoadedRadius
-    local totalContactForce = vec3()
-    tmpVec2:set(lateralForce1, load1, 0.0)
-    tmpVec1:set(0.0, -loadedRadius1, 0.0):sub(self.steerBasisCenter):cross(tmpVec2)
-    totalContactForce:add(tmpVec1)
-    tmpVec2:set(-lateralForce2, load2, 0.0)
-    tmpVec1:set(0.0, -loadedRadius2, 0.0):sub(self.steerBasisCenter):cross(tmpVec2):scale(-1.0)
-    totalContactForce:add(tmpVec1)
-    local steerAxisTorque = self.steerBasisAxis:dot(totalContactForce)
-    local mzMult = self.steerBasisAxis:dot(tmpVec1:set(0.0, 1.0, 0.0))
-    steerAxisTorque = steerAxisTorque + mz * mzMult
-    steerAxisTorque = steerAxisTorque * 0.75
-    local ffbStrength = steerAxisTorque / 600.0 * ffbBase
-    return ffbStrength
-end
+-- ---Returns the expected peak
+-- ---@param ffbBase number vehicle.ffbBase
+-- ---@return number FFBPeakEstimate Estimated peak FFB strength before being multiplied by either the global FFB gain or the per-car FFB gain.
+-- function M:getFFBPeakStrengthEstimateCurrent(ffbBase)
+--     local mz = (self.vehicle.wheels[0].mz + self.vehicle.wheels[1].mz)
+--     local load1 = self.vehicle.wheels[0].load
+--     local load2 = self.vehicle.wheels[1].load
+--     local lateralForce1 = self.vehicle.wheels[0].fy
+--     local lateralForce2 = self.vehicle.wheels[1].fy
+--     local loadedRadius1 = self.vehicle.wheels[0].tyreLoadedRadius
+--     local loadedRadius2 = self.vehicle.wheels[1].tyreLoadedRadius
+--     local totalContactForce = vec3()
+--     tmpVec2:set(lateralForce1, load1, 0.0)
+--     tmpVec1:set(0.0, -loadedRadius1, 0.0):sub(self.steerBasisCenter):cross(tmpVec2)
+--     totalContactForce:add(tmpVec1)
+--     tmpVec2:set(-lateralForce2, load2, 0.0)
+--     tmpVec1:set(0.0, -loadedRadius2, 0.0):sub(self.steerBasisCenter):cross(tmpVec2):scale(-1.0)
+--     totalContactForce:add(tmpVec1)
+--     local steerAxisTorque = self.steerBasisAxis:dot(totalContactForce)
+--     local mzMult = self.steerBasisAxis:dot(tmpVec1:set(0.0, 1.0, 0.0))
+--     steerAxisTorque = steerAxisTorque + mz * mzMult
+--     steerAxisTorque = steerAxisTorque * 0.75
+--     local ffbStrength = steerAxisTorque / 600.0 * ffbBase
+--     return ffbStrength
+-- end
 
 ---Returns the expected peak
 ---@param avgWheelLoad number Per-wheel load in N

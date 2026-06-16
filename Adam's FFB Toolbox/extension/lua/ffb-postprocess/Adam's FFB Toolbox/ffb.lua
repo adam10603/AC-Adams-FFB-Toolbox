@@ -1304,5 +1304,5 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
         )
     end
 
-    return finalGuardedFFB, ffbDamper -- what even is the damper in this context? its always 0 even with damping enabled in the ffb settings
+    return finalGuardedFFB, ffbDamper
 end
