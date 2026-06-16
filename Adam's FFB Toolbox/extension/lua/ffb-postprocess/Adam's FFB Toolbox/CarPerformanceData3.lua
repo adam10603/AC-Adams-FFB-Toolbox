@@ -719,20 +719,6 @@ function M:getMzEstimate(avgWheelLoad, staticTireRadius, fy1AtPeakSATWeightShift
     return (mz1 + mz2)
 end
 
--- For the whole front axle under cornering, but not compensated for suspension geometry yet. In Nm.
-function M:getMzEstimateOld(avgWheelLoad, staticTireRadius)
-    local loadMz1 = avgWheelLoad * peakSATWeightShift
-    local loadMz2 = avgWheelLoad * (2.0 - peakSATWeightShift)
-
-    local cpLen1 = self:getFrontContactPatchLengthEstimate(loadMz1, staticTireRadius)
-    local cpLen2 = self:getFrontContactPatchLengthEstimate(loadMz2, staticTireRadius)
-
-    local mz1 = self:getRearPeakLateralForceEst(loadMz1) * 0.78 * cpLen1 / 1.45 * 0.11
-    local mz2 = self:getRearPeakLateralForceEst(loadMz2) * 0.78 * cpLen2 / 1.45 * 0.11
-
-    return (mz1 + mz2)
-end
-
 -- Crude estimation, only based on power and nothing else, could be improved. In m/s.
 function M:getTopSpeedEstimate()
     -- return (math.sqrt(vData.perfData.maxEnginePower * 80.0) + 75) / 3.6
