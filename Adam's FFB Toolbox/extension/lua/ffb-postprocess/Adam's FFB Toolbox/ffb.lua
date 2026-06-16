@@ -624,6 +624,10 @@ local function processFFB(ffbValue, dt)
     -- ac.debug("f fz0", vData.perfData.frontFZ0)
     -- ac.debug("f axis dot", vData.perfData.steerBasisAxis:dot(vec3(0, 1, 0)))
 
+    -- ac.debug("W1 FX", vData.vehiclePR.wheels[1].fy)
+    -- ac.debug("W1 FX est", vData.perfData:getFrontPeakLateralForceEst(vData.vehiclePR.wheels[1].load))
+    -- ac.debug("max rpm", vData.perfData.maxRPM)
+
     -- ac.debug("DATA", string.format("%.1f\t%.1f\t%.1f\t%.1f\t%.0f\t%.4f\t%.4f", mathAbs(vData.vehiclePR.wheels[1].fy), mathAbs(vData.vehiclePR.wheels[1].mz), vData.vehiclePR.wheels[1].load, vData.perfData.frontFZ0, vData.perfData.frontTireRate, vData.perfData.steerBasisAxis:dot(vec3(0, 1, 0)), vData.vehicle.wheels[1].tyreRadius))
 
     local function getFFBBaseStrength(load, mz)
@@ -645,7 +649,7 @@ local function processFFB(ffbValue, dt)
     -- local currentEstFFB = vData.perfData:getFFBPeakStrengthEstimateCurrent(vData.vehicle.ffbBase) * ac.getFFBGain()
     -- ac.debug("current est ffb", currentEstFFB, -1.0, 1.0)
     -- local frontSlipAngleNdAbs = mathAbs(vData.frontSlipDeg / frontPeakSlipAngle)
-    -- if frontSlipAngleNdAbs > 0.35 and frontSlipAngleNdAbs < 0.45 and (vData.vehiclePR.wheels[0].load + vData.vehiclePR.wheels[1].load) > (frontWheelLoadAtCurrentSpeed * 2.0 * 0.5) and vData.vehiclePR.wheels[0].load > 0.0 and vData.vehiclePR.wheels[1].load > 0.0 and mathAbs(currentEstFFB) > 0.01 then
+    -- if frontSlipAngleNdAbs > 0.35 and frontSlipAngleNdAbs < 0.45 and (vData.vehiclePR.wheels[0].load + vData.vehiclePR.wheels[1].load) > (frontWheelLoadAtCurrentSpeed * 2.0 * 0.5) and vData.vehiclePR.wheels[0].load > 0.0 and vData.vehiclePR.wheels[1].load > 0.0 and mathAbs(currentEstFFB) > 0.01 and vData.vehiclePR.wheels[0].surfaceExtendedType == ac.SurfaceExtendedType.Base and vData.vehiclePR.wheels[1].surfaceExtendedType == ac.SurfaceExtendedType.Base then
     --     ac.debug("ffb est ratio", mathAbs(ffbRefLevelVDynamic) / mathAbs(currentEstFFB))
     -- end
 
@@ -1212,11 +1216,6 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
 
     local vehicle = ac.getCar(0) or car
 
-    if ac.getCarSetupState() == "validating" or vehicle.isInPit then
-        resetInitValues()
-        return ffbValue, ffbDamper
-    end
-
     if initialSkips < 2 then -- not necessary anymore with pcall, but whatever
         initialSkips = initialSkips + 1
         return ffbValue, ffbDamper
@@ -1225,8 +1224,9 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
     ac.debug("Gen | original FFB", ffbValue, -1.0, 1.0)
 
     local finalFFB = ffbValue
+    local scriptEnabled = getConfigValue("scriptEnabled")
 
-    if getConfigValue("scriptEnabled") then
+    if scriptEnabled and not (ac.getCarSetupState() == "validating" or vehicle.isInPit) then -- sadly there is no good way to detect if the player is on the setup screen
         local success = false
         success, finalFFB = pcall(processFFB, ffbValue, dt)
 
@@ -1252,6 +1252,10 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
     -- ac.debug("sim.isSessionStarted", sim.isSessionStarted) -- false before the race start, then stays true after the lights go out until the next session
     -- ac.debug("sim.currentSessionIndex", sim.currentSessionIndex)
     -- ac.debug("sim.isOnlineRace", sim.isOnlineRace)
+    -- ac.debug("sim.sessionTimeLeft", sim.sessionTimeLeft)
+
+    -- post-race fade
+    -- this is outside the main ffb processing function because it needs to keep track of sessions, so it needs to run on every update
 
     if sim.isOnlineRace and sim.isSessionStarted and sim.raceSessionType == ac.SessionType.Race then
         if sim.raceFlagType == ac.FlagType.Finished and tSinceRaceFinished >= 0.0 then
@@ -1265,8 +1269,9 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
         tSinceRaceFinished = 0.0 -- reset this to 0 when a different session is detected
     end
 
----@diagnostic disable-next-line: cast-local-type
-    local postRaceFFBMultSmooth = mathLerp(1.0, getConfigValue("ffbLevelAfterFinish"), mathSmoothstep(postRaceMultBlendSmoother:get((tSinceRaceFinished - 1.0) > 1e-6 and 1.0 or 0.0, dt)))
+    local postRaceFFBMultRawBlend = ((tSinceRaceFinished - 1.0) > 1e-6) and 1.0 or 0.0
+    local postRaceFFBMultSmooth = mathLerp(1.0, getConfigValue("ffbLevelAfterFinish"), mathSmoothstep(postRaceMultBlendSmoother:get(postRaceFFBMultRawBlend, dt)))
+    postRaceFFBMultSmooth = scriptEnabled and postRaceFFBMultSmooth or 1.0
 
     finalFFB = finalFFB * postRaceFFBMultSmooth
 
@@ -1300,5 +1305,5 @@ function script.update(ffbValue, ffbDamper, steerInput, steerInputSpeed, dt)
         )
     end
 
-    return finalGuardedFFB, ffbDamper -- what even is the damper in this context? its always 0 even with damping enabled in the ffb settings
+    return finalGuardedFFB, ffbDamper
 end
