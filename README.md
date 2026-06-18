@@ -1,6 +1,6 @@
 # Assetto Corsa: Adam's FFB Toolbox
 
-![Version](https://img.shields.io/badge/Version-1.1.2-blue.svg) ![Compatibility](https://img.shields.io/badge/CSP-0.2.11+-green.svg)
+![Version](https://img.shields.io/badge/Version-1.1.3-blue.svg) ![Compatibility](https://img.shields.io/badge/CSP-0.2.11+-green.svg)
 
 ![Banner](https://i.imgur.com/gPBsANw.jpeg)
 
@@ -57,6 +57,8 @@ The ***Presets*** tab lets you save your settings to preset files. You can also 
 On the ***Graph*** tab you can set up a graph window to see how the plugin is changing your FFB in real-time.
 
 ![Graph window](https://i.imgur.com/UkB92a0.png)
+
+Whenever the ***Auto-adjust gain*** setting is active, the ***Increase FFB*** and ***Decrease FFB*** keybinds (under Content Manager ➔ Settings ➔ Controls ➔ Patch) can be used to adjust the auto-gain offset of the current car. If the auto-gain feature isn't being used then these keybinds will work as normal (adjusting the FFB gain of the car directly).
 
 ## 💖 Supporting
 
