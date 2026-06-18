@@ -259,7 +259,7 @@ function M:new(vehicle, cPhys)
     end
 
     if aeroIni:get("MAP_0", "NAME", "") ~= "" then
-        ac.setMessage("Adam's FFB Toolbox", "Downforce compensation and FFB gain-related options might not work correctly on this car!", nil, 10.0)
+        ac.setMessage("Downforce compensation and FFB gain-related options might not work right on this car!", "Adam's FFB Toolbox", nil, 10.0)
     end
 
     return obj

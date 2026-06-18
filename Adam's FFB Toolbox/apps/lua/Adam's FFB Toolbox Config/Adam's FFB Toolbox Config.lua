@@ -25,7 +25,7 @@ elseif badModuleDirExists and goodModuleDirExists then
 
     if anyCopyFailed then
         ac.error("Plugin cant be updated, blame Ilja")
-        ac.setMessage("Adam's FFB Toolbox", "ERROR: Failed to update plugin. Check the F.A.Q. page for solutions.", nil, 10.0)
+        ac.setMessage("ERROR: Failed to update plugin. Check the F.A.Q. page for solutions.", "Adam's FFB Toolbox", nil, 10.0)
     else
         if nFilesCopied > 0 then
             ac.log("Plugin updated")
@@ -39,7 +39,7 @@ local function verifyVersion()
     local appManifest = ac.INIConfig.load(ac.getFolder(ac.FolderID.ACAppsLua) .. "\\Adam's FFB Toolbox Config\\manifest.ini", ac.INIFormat.Extended)
     local ffbModuleManifest = ac.INIConfig.load(goodModulePath .. "\\manifest.ini", ac.INIFormat.Extended)
     if appManifest:get("ABOUT", "VERSION", "A") ~= ffbModuleManifest:get("ABOUT", "VERSION", "B") then
-        ac.setMessage("Adam's FFB Toolbox", "ERROR: module version mismatch! Try re-installing the mod or checking the F.A.Q. page for solutions.", nil, 10.0)
+        ac.setMessage("ERROR: module version mismatch! Try re-installing the mod or checking the F.A.Q. page!", "Adam's FFB Toolbox", nil, 10.0)
         return false
     end
 
@@ -72,7 +72,7 @@ ffbGraphPointCount = math.min(ffbGraphPointCount, storage.ffbHistoryBufferCapaci
 
 local defaultAppConfig = {
     firstInstallPassed = false, -- set to true once the intro screen is passed for the first time
-    biggerFont = false,
+    biggerFont = true,
     graphZoomed = false,
     graphRawPlot = true,
     graphFinalPlot = true,
@@ -213,7 +213,7 @@ local tooltips = {
     resetAllCarSettings = "Removes all the car-specific overrides from this car.",
     resetCarSetting = "Removes the car-specific override from this setting.",
     autoAdjustGain = "Automatically sets your per-car FFB gain to the recommended value below.\n\nThe recommended gain will bring the car's actual FFB level in line with your global FFB gain setting.\n\nThis makes the FFB strength feel more consistent across different cars.\n\nWARNING: Avoid using other auto-gain apps when this setting is active, they might conflict with each other.",
-    autoGainOffset = "Changes the level that the automatic gain targets.",
+    autoGainOffset = "Changes the level that the automatic gain targets.\n\nFor easier adjustments on the fly you can bind the \"Increase FFB\" and \"Decrease FFB\" buttons in the control settings in Content Manager (under the \"Patch\" tab)!\n\nWhenever the auto-gain feature is active, these binds will be repurposed for adjusting the car-specific version of this offset.",
     absFilterEnabled = "Applies a small amount of filtering to the FFB only while the ABS is active.\n\nThis will reduce ABS vibrations in your wheel when you're braking, but won't change the FFB in any other situation.\n\nThis is separate from the general filter setting below, the two can be used at the same time.",
     filterEnabled = "Enables the general smoothing of the FFB signal through a low-pass filter.\n\nFiltering can help to reduce unwanted noise or high-frequency vibrations.\n\nThis is separate from AC's built-in filter setting, and using both at the same time is not recommended.",
     filterFrequency = "Lower = more filtering and a smoother FFB signal.",
@@ -226,8 +226,8 @@ local tooltips = {
     brakeFeelFilter = "Applies a small amount of filtering only to the additional force from the brake feel effect.\n\nNormally the brake feel effect can amplify the feeling of bumps, curbs and other vibrations while braking, which this setting helps to reduce.",
     brakeFeelExponent = "Changes the response curve of the brake feel setting.\n\nUnder 1.0 = the brake feel comes in sooner, but changes less near the maximum.\n\n1.0 = linear response.\n\nOver 1.0 = the brake feel comes in slower at first, but changes faster near the maximum. This can give a more obvious feel in the zone where lockups can happen.",
     brakeFeelMakeupGain = "If you add extra brake feel force, this setting will compensate by decreasing the overall FFB level accordingly.",
-    lockupFeel = "Reduces FFB strength when the front wheels lock up.\n\nThis also happens naturally, but this setting will exaggerate the effect.\n\nThis effect is highly recommended if you're also using the brake feel setting, since that setting alone only communicates lockups to a limited extent.",
-    lockupFeelWithABS = "Disables the lockup feel effect when ABS is present.\n\nThis will avoid the FFB strength fluctuating even if the ABS momentarily goes over the grip limit slightly.", -- inverted on ui
+    lockupFeel = "Reduces FFB strength when the front wheels lock up.\n\nThis also happens naturally, but this setting will exaggerate the effect.\n\nThis effect is especially recommended if you're also using the brake feel setting, since that setting alone only communicates lockups to a limited extent.",
+    lockupFeelWithABS = "Disables the lockup feel effect when ABS is present.\n\nThis prevents the FFB strength from needlessly fluctuating when braking with ABS, since ABS can sometimes still go over the grip limit momentarily which would normally trigger this effect.", -- inverted on ui
     extraSAT = "Adds extra self-aligning torque (SAT) to the FFB.\n\nSAT is the part of the FFB that makes the initial force stronger when turning in, then reduce as you steer more and reach the grip limit of the tires.\n\nThis setting will add additional SAT on top of the amount already in the FFB, making it easier to feel the grip limit of the tires and to feel understeer.\n\nThis can be especially useful in cars with a high caster angle.",
     extraSATSuspensionCompensation = "The amount of extra SAT will be scaled according to the car's suspension geometry.\n\nIf a car has weak SAT by default then the added amount will be higher. If a car already has a strong SAT feeling then the added amount will be much less.\n\nThis means the extra SAT you add will feel more consistent across different cars.",
     extraSATMakeupGain = "If you add extra SAT to the FFB, this setting will compensate by decreasing the overall FFB level accordingly.\n\nThis basically turns the extra SAT into something similar to AC's understeer effect.",
@@ -239,9 +239,9 @@ local tooltips = {
     vibrationBaseFrequency = "The frequency of the vibration effect.\n\nThe actual frequency of the vibration output might be modulated further depending on the vibration source, but this setting is always used as the baseline.",
     vibrationSharpness = "Changes the texture / feel of the vibration.\n\n0% = pure sine wave, the smoothest feel.\n\n100% = square wave, feels much sharper.",
     roadTexture = "Adds the feeling of road texture to the FFB. This can add some immersion on smooth tracks.\n\nThe effect changes dynamically with speed, tire load, tire slip and surface type.",
-    roadTextureBypassFilter = "When enabled, it allows the road texture effect to bypass the general filter.\n\nThis means that even when you use the general FFB filter setting, the road texture setting will remain feeling sharp.\n\nWhen disabled, the general filter will smooth out the added road texture effect too.\n\nIf you don't use the general filter setting then this won't do anything.",
+    roadTextureBypassFilter = "When enabled, it allows the road texture effect to bypass the general filter (in the \"Strength and filtering\" section).\n\nThis means that even when you use the general FFB filter setting, the road texture setting will remain feeling sharp.\n\nWhen disabled, the general filter will smooth out the added road texture effect too.\n\nIf you don't use the general filter setting then this won't change anything.",
     peakReduction = "Temporarily filters out sudden peaks from the FFB when a collision is detected.\n\nThis helps to avoid unpleasant or dangerous jolts in your wheel when hitting a wall or another car.",
-    ffbLevelAfterFinish = "When you finish a race and get the checkered flag, your FFB strength will be reduced to this level. Upon returning to the pits your FFB will be restored to normal.\n\nThis is for preventing your wheel from going crazy if another car decides to hit you after the race ends, as they sometimes do.\n\n100% = no change.\n\nUnder 100% = reduced FFB post-race (until pitting).",
+    ffbLevelAfterFinish = "When you finish a race and get the checkered flag, your FFB strength will be reduced to this level. Upon returning to the pits or moving into the next session your FFB will be restored to normal.\n\nThis is for preventing your wheel from going crazy if another car decides to hit you after the race ends, as they sometimes do.\n\n100% = no change.\n\nUnder 100% = reduced FFB post-race (until pitting or a new session starting).",
     fixExtraSettings = "", -- added dynamically in code
     ffbGain = "Controls the FFB multiplier of the current car.",
     DISABLED_ffbGain = "Not available when using \"auto-adjust gain\".\n\nUse the \"auto-gain offset\" setting instead!",
@@ -326,7 +326,7 @@ local tmpVec2 = vec2()
 local tmpVec3 = vec2()
 
 local factoryPresets = {}
-factoryPresets["Author's preference"] = '{"extraSAT":1.5,"filterFrequency":32,"extraSATSuspensionCompensation":true,"extraSATMakeupGain":true,"oversteerFeel":0.69999998807907,"autoAdjustGain":true,"oversteerFeelMakeupGain":false,"_version":100,"downforceCompMode":2,"lockupFeelWithABS":false,"downforceCompPercentage":1,"ffbLevelAfterFinish":0.050000000745058,"oversteerFeelAggression":1,"downforceCompDynamicRange":1.2999999523163,"vibrationBaseFrequency":15,"downforceCompMakeupGain":true,"brakeFeelFilter":true,"brakeFeel":0.69999998807907,"filterEnabled":false,"brakeFeelExponent":2,"vibrationSource":2,"brakeFeelWithABS":true,"vibrationLevel":0.18000000715256,"autoGainOffset":0,"brakeFeelMakeupGain":false,"absFilterEnabled":true,"lockupFeel":0.80000001192093,"peakReduction":true}'
+factoryPresets["Author's preference"] = '{"roadTexture":0,"filterFrequency":32,"roadTextureBypassFilter":false,"extraSATMakeupGain":true,"vibrationSharpness":0.5,"oversteerFeel":0.69999998807907,"peakReduction":true,"oversteerFeelAggression":1,"oversteerFeelMakeupGain":false,"lockupFeelWithABS":false,"_version":110,"downforceCompMode":2,"extraSATSuspensionCompensation":true,"downforceCompPercentage":1,"vibrationBaseFrequency":15,"autoGainOffset":0,"downforceCompDynamicRange":1.2999999523163,"extraSAT":1.5,"downforceCompMakeupGain":true,"ffbLevelAfterFinish":0.050000000745058,"brakeFeel":0.69999998807907,"autoAdjustGain":true,"brakeFeelExponent":2,"vibrationSource":0,"brakeFeelWithABS":true,"vibrationLevel":0.18000000715256,"brakeFeelFilter":true,"brakeFeelMakeupGain":false,"absFilterEnabled":true,"lockupFeel":0.80000001192093,"filterEnabled":false}'
 
 -- Checking if a new version is available
 
@@ -784,10 +784,10 @@ local function drawHapticsSection(perCarTab)
 
     showHeader("Road texture:")
     overridableItemWrapper(perCarTab, "roadTexture", function (textColor)
-        showConfigSlider(configTable, "roadTexture", "Road texture effect", "%.1f%%", 0.0, 25.0, 100.0, getSliderWidth(sliderRightPadding), sectionPadding, false, textColor)
+        showConfigSlider(configTable, "roadTexture", "Road texture effect", "%.1f%%", 0.0, 30.0, 100.0, getSliderWidth(sliderRightPadding), sectionPadding, false, textColor)
     end)
     overridableItemWrapper(perCarTab, "roadTextureBypassFilter", function (textColor)
-        showCheckbox(configTable, "roadTextureBypassFilter", "Bypass filter", false, false, textColor)
+        showCheckbox(configTable, "roadTextureBypassFilter", "Bypass general filter", false, false, textColor)
     end)
 end
 
@@ -834,6 +834,8 @@ end
 -- end
 
 local function drawCompleteSettingsPage(perCarTab)
+    local configTable = perCarTab and carSpecificConfig or generalConfig
+
     if perCarTab then
         if showButton("Reset all overrides for this car", false, "resetAllCarSettings", nil, nil, 0) then
             resetCarOverrides()
@@ -842,7 +844,7 @@ local function drawCompleteSettingsPage(perCarTab)
     end
 
     overridableItemWrapper(perCarTab, "scriptEnabled", function(textColor)
-        showCheckbox(generalConfig, "scriptEnabled", "Enable FFB processing", false, false, textColor, 0)
+        showCheckbox(configTable, "scriptEnabled", "Enable FFB processing", false, false, textColor, 0)
     end)
     showDummyLine(0.5)
 

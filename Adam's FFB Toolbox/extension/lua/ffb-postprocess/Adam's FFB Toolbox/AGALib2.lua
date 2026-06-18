@@ -556,6 +556,70 @@ function M.StructValueHistory.clear(buffer, capacity, head, count)
     return 0, 0
 end
 
+-- Issues callbacks on key press and repeat events based on key down state
+M.KeyPressHandler = {}
+
+function M.KeyPressHandler:new(callback, repeatDelay, repeatInterval)
+    self.__index = self
+    return setmetatable({
+        callback = callback,
+        repeatDelay = repeatDelay,
+        repeatInterval = repeatInterval,
+        wasDown = false,
+        pressTime = nil,
+        lastRepeatTime = nil,
+    }, self)
+end
+
+function M.KeyPressHandler:update(isDown, now, skipCallbacks)
+    local callbackFired = false
+
+    if isDown and not self.wasDown then
+        self.wasDown = true
+        self.pressTime = now
+        self.lastRepeatTime = nil
+
+        if self.callback and not skipCallbacks then
+            self.callback()
+            callbackFired = true
+        end
+        return callbackFired
+    end
+
+    if isDown and self.repeatDelay ~= nil and self.repeatInterval ~= nil then
+        local heldTime = now - self.pressTime
+
+        if heldTime >= self.repeatDelay then
+            local repeatStart = self.pressTime + self.repeatDelay
+
+            if self.lastRepeatTime == nil then
+                self.lastRepeatTime = repeatStart
+            end
+
+            while now >= self.lastRepeatTime + self.repeatInterval do
+                self.lastRepeatTime = self.lastRepeatTime + self.repeatInterval
+                if self.callback and not skipCallbacks then
+                    self.callback()
+                    callbackFired = true
+                end
+            end
+        end
+
+    elseif self.wasDown then
+        self.wasDown = false
+        self.pressTime = nil
+        self.lastRepeatTime = nil
+    end
+
+    return callbackFired
+end
+
+function M.KeyPressHandler:reset()
+    self.wasDown = false
+    self.pressTime = nil
+    self.lastRepeatTime = nil
+end
+
 
 local _updateRateValueHistory = {}
 function M.measureUpdateRate(key, value, dt)
