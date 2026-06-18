@@ -438,6 +438,44 @@ local prevBrakingSR = 0.0
 local oversteerFeelConditionSmoother = lib.SmoothTowards:new(4.0, 1.0, 0.0, 1.0, 1.0)
 local lastCollisionProtectionBlend = 0.0
 local lastEngagedGearChange = 0.0
+local currentFFBMessageBlock = nil
+
+local function blockUserFFBMessages()
+    if currentFFBMessageBlock == nil then
+        currentFFBMessageBlock = ac.blockSystemMessages("User level for")
+    end
+end
+
+local function unblockUserFFBMessages()
+    if currentFFBMessageBlock ~= nil then
+        currentFFBMessageBlock()
+        currentFFBMessageBlock = nil
+    end
+end
+
+local function onFFBMultUserChange(increase)
+    -- checked externally
+    -- if not getConfigValue("autoAdjustGain") then
+    --     return
+    -- end
+
+    carSpecificConfig["OVERRIDE_autoGainOffset"] = true
+    carSpecificConfig["autoGainOffset"] = mathClamp(carSpecificConfig["autoGainOffset"] + (increase and 0.01 or -0.01), -0.5, 0.5)
+end
+
+local function onFFBIncreasePressed()
+    onFFBMultUserChange(true)
+end
+
+local function onFFBDecreasePressed()
+    onFFBMultUserChange(false)
+end
+
+local ffbIncreaseControl = ac.ControlButton("__EXT_FFB_INCREASE")
+local ffbDecreaseControl = ac.ControlButton("__EXT_FFB_DECREASE")
+
+local ffbIncreaseControlHandler = lib.KeyPressHandler:new(onFFBIncreasePressed, 0.5, 0.05)
+local ffbDecreaseControlHandler = lib.KeyPressHandler:new(onFFBDecreasePressed, 0.5, 0.05)
 
 -- local w0PrevNormal = vec3(0.0, 1.0, 0.0)
 -- local w1PrevNormal = vec3(0.0, 1.0, 0.0)
@@ -458,6 +496,8 @@ local function resetInitValues()
     oversteerFeelConditionSmoother:reset()
     lastCollisionProtectionBlend = 0.0
     lastEngagedGearChange = 0.0
+    ffbIncreaseControlHandler:reset()
+    ffbDecreaseControlHandler:reset()
 end
 
 local function onFactoryReset()
@@ -573,6 +613,9 @@ local function onProcessingSkip(ffbValue, vehicle) -- clears any leftover state 
     lastCollisionProtectionBlend = 0.0
     runtimeData.autoGainLevel = -1
     runtimeData.downforceDynamicRange = -1
+    ffbIncreaseControlHandler:reset()
+    ffbDecreaseControlHandler:reset()
+    unblockUserFFBMessages()
     -- w0PrevSurfaceType = vehicle.wheels[0].surfaceExtendedType -- should be vehicle PR but its probably ok
     -- w1PrevSurfaceType = vehicle.wheels[1].surfaceExtendedType
     -- w0PrevNormal:set(0.0, 1.0, 0.0)
@@ -657,13 +700,33 @@ local function processFFB(ffbValue, dt)
 
     -- auto gain
 
-    local adjustAutoGain = getConfigValue("autoAdjustGain")
+    local autoAdjustGain = getConfigValue("autoAdjustGain")
+
+    if autoAdjustGain then
+        blockUserFFBMessages()
+    else
+        unblockUserFFBMessages()
+    end
+
+    local ffbIncreaseDown = ffbIncreaseControl:down()
+    local ffbDecreaseDown = ffbDecreaseControl:down()
+
+    local ffbIncreaseFired = ffbIncreaseControlHandler:update(ffbIncreaseDown, now, not autoAdjustGain)
+    local ffbDecreaseFired = ffbDecreaseControlHandler:update(ffbDecreaseDown, now, not autoAdjustGain)
+
     local autoGainOffset = getConfigValue("autoGainOffset")
+
     local newGainMultiplier = 1.0 / ffbBaseStrengthVRef * (1.0 + autoGainOffset)
     newGainMultiplier = libNumberGuard(mathRound(mathClamp(newGainMultiplier, 0.2, 5.0) * 100.0) / 100.0, vData.vehicle.ffbMultiplier)
     runtimeData.autoGainLevel = mathRound(newGainMultiplier * 100.0)
 
-    if adjustAutoGain and (now - lastGainChangeAttempt) >= (1.0 / 15.0) then
+    if ffbIncreaseFired or ffbDecreaseFired then
+        runtimeData.appHeartbeatClock = now -- this ensures the changes will be saved
+
+        ac.setMessage(string.format("%s auto-gain offset: %d%%", vData.vehicle:name(), mathRound(autoGainOffset * 100.0)), "Adam's FFB Toolbox", nil, 5.0)
+    end
+
+    if autoAdjustGain and (now - lastGainChangeAttempt) >= (1.0 / 15.0) then
         lastGainChangeAttempt = now
         if mathAbs(vData.vehicle.ffbMultiplier - newGainMultiplier) > 0.00099 then
             ac.broadcastSharedEvent("AFFBT_setFFBMultiplier", newGainMultiplier)
@@ -1100,9 +1163,12 @@ local function processFFB(ffbValue, dt)
 
             local feedbackValue = 0.0
             local feedbackFullRange = 0.0
-            local feedbackRampBegin = 0.5
-            local feedbackRampEnd = 1.0
-            local feedbackBrakeInputOffset = 0.1 -- used for an earlier or later warning than normal. positive is earlier
+
+            local brakeFeedbackRampBegin = 0.4
+            local brakeFeedbackRampEnd = 0.9
+            local throttleFeedbackRampBegin = 0.45 * 1.4
+            local throttleFeedbackRampEnd = 1.0 * 1.4
+            local throttleFeedbackSlipAngleSens = 0.85
             local feedbackBaseline = 0.3
             local frequencyRampEnd = 2.0
 
@@ -1111,7 +1177,7 @@ local function processFFB(ffbValue, dt)
                 -- return ndTarget
             end
 
-            local function slipRatioFeedbackImpl(currentSlipRatio, peakSlipRatio, currentNdSlipAngleAbs)
+            local function slipRatioFeedbackImpl(currentSlipRatio, peakSlipRatio, currentNdSlipAngleAbs, rampBegin, rampEnd)
                 -- return calcProgressiveFeedback(
                 --     currentSlipRatio,
                 --     peakSlipRatio * mathClamp(getNdSlipRatioTarget(currentNdSlipAngle, feedbackRampBegin), 0.5, 1.0),
@@ -1122,9 +1188,9 @@ local function processFFB(ffbValue, dt)
                 -- this version below is less accurate but its needed to keep the values sane for the feedback ramp
 
                 -- local peakUsed = mathLerp(getNdSlipRatioTarget(currentNdSlipAngleAbs, 1.0), 1.0, 0.5)
-                local peakUsed = getNdSlipRatioTarget(currentNdSlipAngleAbs * 0.75, 1.0)
-                local startMult = peakUsed * feedbackRampBegin
-                local endMult = peakUsed * feedbackRampEnd
+                local peakUsed = getNdSlipRatioTarget(currentNdSlipAngleAbs * throttleFeedbackSlipAngleSens, 1.0)
+                local startMult = peakUsed * rampBegin
+                local endMult = peakUsed * rampEnd
 
                 return calcProgressiveFeedback(
                     currentSlipRatio,
@@ -1137,8 +1203,7 @@ local function processFFB(ffbValue, dt)
             local function getBrakeHelpFeedback() -- only considers front wheels for now
                 if vData.vehiclePR.brake > 0.01 and vData.vehicle.absMode < 1 then
                     local baseValue = -vData.frontSlipRatio * mathSign(vData.localVel.z)
-                    baseValue = baseValue + feedbackBrakeInputOffset * frontPeakSlipRatio
-                    return slipRatioFeedbackImpl(baseValue, frontPeakSlipRatio, frontNdSlipAngleAbs)
+                    return slipRatioFeedbackImpl(baseValue, frontPeakSlipRatio, frontNdSlipAngleAbs, brakeFeedbackRampBegin, brakeFeedbackRampEnd)
                 end
                 return 0.0, 0.0
             end
@@ -1146,7 +1211,7 @@ local function processFFB(ffbValue, dt)
             local function getThrottleHelpFeedback()
                 local feedbackCooldownAfterShifting = 0.25
                 if vData.vehiclePR.gas > 0.01 and vData.vehicle.tractionControlMode < 1 and (now - lastEngagedGearChange) > feedbackCooldownAfterShifting then
-                    return slipRatioFeedbackImpl(drivenAxleSlipRatio * mathSign(engagedGear), drivenAxlePeakSlipRatio, drivenAxleNdSlipAngleAbs)
+                    return slipRatioFeedbackImpl(drivenAxleSlipRatio * mathSign(engagedGear), drivenAxlePeakSlipRatio, drivenAxleNdSlipAngleAbs, throttleFeedbackRampBegin, throttleFeedbackRampEnd)
                 end
 
                 return 0.0, 0.0
@@ -1175,6 +1240,7 @@ local function processFFB(ffbValue, dt)
             local finalFeedback = vibrationFeedbackSmoother:getWithRate(feedbackValue, dt, vibrationFrequency * 1.5)
 
             ac.debug("Hap | vibration feedback raw", feedbackValue, 0.0, 1.0)
+            ac.debug("Hap | vibration feedback full range", feedbackFullRange, 0.0, 1.0)
             ac.debug("Hap | vibration feedback smooth", finalFeedback, 0.0, 1.0)
 
             if feedbackValue > 0.01 then

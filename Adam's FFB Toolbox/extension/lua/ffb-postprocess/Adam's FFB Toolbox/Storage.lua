@@ -107,7 +107,7 @@ M.carSpecificConfig = {
     ffbLevelAfterFinish = ac.StructItem.float()
 }
 
--- defaults should be a disabled state for each setting, but with the script enabled in general
+-- defaults should be an inactive state for each effect, but with the script enabled in general
 M.defaultSettings = {
     scriptEnabled = true,
     autoAdjustGain = false,
@@ -118,16 +118,16 @@ M.defaultSettings = {
     downforceCompMode = 0,
     downforceCompPercentage = 1.0,
     downforceCompDynamicRange = 2.5,
-    downforceCompMakeupGain = false,
+    downforceCompMakeupGain = true,
     brakeFeel = 0.0,
     brakeFeelWithABS = true,
-    brakeFeelFilter = false,
+    brakeFeelFilter = true,
     brakeFeelExponent = 1.0,
     brakeFeelMakeupGain = false,
     lockupFeel = 0.0,
-    lockupFeelWithABS = true,
+    lockupFeelWithABS = false,
     extraSAT = 0.0,
-    extraSATSuspensionCompensation = false,
+    extraSATSuspensionCompensation = true,
     extraSATMakeupGain = false,
     oversteerFeel = 0.0,
     oversteerFeelAggression = 1.0,
