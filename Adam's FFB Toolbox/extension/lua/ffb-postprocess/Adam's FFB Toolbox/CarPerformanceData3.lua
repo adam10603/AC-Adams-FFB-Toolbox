@@ -21,6 +21,14 @@ function M:new(vehicle, cPhys)
     local turboData       = {}
     local torqueCurve     = nil
 
+    local jsonContent = storage.readFile(ac.getFolder(ac.FolderID.ContentCars) .. "\\" .. vehicle:id() .. "\\ui\\ui_car.json")
+
+    if type(jsonContent) == "string" then
+        jsonContent = jsonContent:gsub("[\r\n\t]", "")
+    end
+
+    local uiDataAvailable, parsedUIData = pcall(json.decode, jsonContent)
+
     -- Reading engine data
 
     local engineINI = ac.INIConfig.carData(vehicle.index, "engine.ini")
@@ -31,7 +39,7 @@ function M:new(vehicle, cPhys)
         torqueCurve = ac.DataLUT11.carData(vehicle.index, engineINI:get("HEADER", "POWER_CURVE", "power.lut")) -- engineINI:tryGetLut("HEADER", "POWER_CURVE")
 
         if torqueCurve then
-            torqueCurve.useCubicInterpolation = true
+            torqueCurve.useCubicInterpolation = false
             torqueCurve.extrapolate           = true
         end
 
@@ -62,7 +70,7 @@ function M:new(vehicle, cPhys)
                         local controllerLUT     = ctrl:tryGetLut("CONTROLLER_" .. j, "LUT")
 
                         if controllerInput and controllerCombine and controllerLUT then
-                            controllerLUT.useCubicInterpolation = true
+                            controllerLUT.useCubicInterpolation = false
                             controllerLUT.extrapolate = true
                             table.insert(controllers, {
                                 input      = controllerInput,
@@ -80,6 +88,66 @@ function M:new(vehicle, cPhys)
                     })
                 end
             end
+        end
+    end
+
+    local uiTorqueCurveAvailable = false
+    local uiTorqueLut = ac.DataLUT11()
+    local uiTorqueBad = false
+    local uiMaxRPM = 0
+    local uiMinRPM = 99999
+    local uiMaxPower = 0
+
+    if uiDataAvailable and type(parsedUIData) == "table" and type(parsedUIData["torqueCurve"]) == "table" then
+        for _, entry in ipairs(parsedUIData["powerCurve"]) do
+            if type(entry) ~= "table" then
+                uiTorqueBad = true
+                break
+            end
+
+            local r = entry[1]
+            local p = entry[2]
+            if type(p) == "string" then
+                p = tonumber(p)
+            end
+            if type(p) ~= "number" then
+                uiTorqueBad = true
+                break
+            end
+            if type(r) == "string" then
+                r = tonumber(r)
+            end
+            if type(r) ~= "number" then
+                uiTorqueBad = true
+                break
+            end
+
+            p = p * 1.16 -- rough compensation to match the range that the proper method would return
+            local t = p * 5252.0 / r
+
+            if r < uiMinRPM then
+                uiMinRPM = r
+            end
+
+            if r > uiMaxRPM then
+                uiMaxRPM = r
+            end
+
+            if p > uiMaxPower then
+                uiMaxPower = p
+            end
+
+            uiTorqueLut:add(r, t)
+        end
+    end
+
+    if vehicle.mgukDeliveryCount ~= 0 and not brokenEngineINI then
+        if uiDataAvailable and not uiTorqueBad and uiMinRPM < math.lerp(idleRPM, maxRPM, 0.33) and uiMaxRPM > maxRPM * 0.995 then
+            uiTorqueLut.useCubicInterpolation = false
+            uiTorqueLut.extrapolate = true
+            torqueCurve = uiTorqueLut
+            uiTorqueCurveAvailable = true
+            ac.log("Using UI power curve")
         end
     end
 
@@ -111,6 +179,7 @@ function M:new(vehicle, cPhys)
         aeroIni                 = aeroIni,
         brokenEngineIni         = brokenEngineINI,
         baseTorqueCurve         = torqueCurve,
+        uiTorqueCurveAvailable  = uiTorqueCurveAvailable,
         turboData               = turboData,
         idleRPM                 = idleRPM,
         maxRPM                  = maxRPM,
@@ -178,46 +247,20 @@ function M:new(vehicle, cPhys)
 
     local function findPeakPower()
         if not obj.brokenEngineIni and obj.baseTorqueCurve then
-            for rpm = 0.0, 1.0, 0.05 do
-                local p = obj:getMaxHP(obj:getAbsoluteRPM(rpm), 1)
+            for i = 0, 50, 1 do
+                local p = obj:getMaxHP(obj:getAbsoluteRPM(i / 50.0), 1)
                 if p > obj.maxEnginePower then obj.maxEnginePower = p end
             end
             return true
         end
 
-        local uiFilePath = ac.getFolder(ac.FolderID.ContentCars) .. "\\" .. vehicle:id() .. "\\ui\\ui_car.json"
-
-        local jsonContent = storage.readFile(uiFilePath)
-
-        if not jsonContent then
+        if uiTorqueBad then
             return false
         end
 
-        local success, parsedTable = pcall(function ()
-            return json.decode(jsonContent)
-        end)
+        obj.maxEnginePower = uiMaxPower
 
-        if not success or type(parsedTable) ~= "table" or type(parsedTable["powerCurve"]) ~= "table" then
-            return false
-        end
-
-        for _, entry in ipairs(parsedTable["powerCurve"]) do
-            if type(entry) ~= "table" then
-                return false
-            end
-
-            local p = entry[2]
-            if type(p) == "string" then
-                p = tonumber(p)
-            end
-            if type(p) ~= "number" then
-                return false
-            end
-
-            p = p * 1.16 -- rough compensation to match the range that the proper method would return
-
-            if p > obj.maxEnginePower then obj.maxEnginePower = p end
-        end
+        ac.log("Using UI max power")
 
         return true
     end
@@ -285,14 +328,14 @@ function M:getMaxTQ(rpm, gear)
     local totalBoost = 0.0 -- Total boost from all turbos
 
     for _, turbo in ipairs(self.turboData) do
-        local currentTurboBoost = (rpm / turbo.referenceRPM) ^ turbo.gamma -- 0 -- Boost from this turbo
+        local currentTurboBoost = math.clamp(rpm / turbo.referenceRPM, 0.0, 1.0) ^ turbo.gamma -- 0 -- Boost from this turbo
 
         if table.nkeys(turbo.controllers) > 0 then
             for _, controller in ipairs(turbo.controllers) do
                 local controllerValue = 0 -- Boost from a single controller
 
                 if controller.input == "RPMS" then
-                    controller.LUT.useCubicInterpolation = true
+                    controller.LUT.useCubicInterpolation = false
                     controllerValue = controller.LUT:get(rpm)
                 elseif turbo.controllerInput == "GEAR" then
                     controller.LUT.useCubicInterpolation = false
@@ -347,18 +390,20 @@ function M:calcShiftingTable(minNormRPM, maxNormRPM)
     for gear = 1, self.vehicle.gearCount - 1, 1 do
         local bestUpshiftRPM = defaultFallback
 
-        if self.vehicle.mgukDeliveryCount == 0 then
+        if self.vehicle.mgukDeliveryCount == 0 or self.uiTorqueCurveAvailable then
             local bestArea = 0
-            local areaSkew = 1.0 --math.lerp(1.0, 1.0, (gear - 1) / (self.vehicle.gearCount - 2)) -- shifts the bias of the power integral higher as the gear number increases
+            -- local areaSkew = 1.0 --math.lerp(1.0, 1.0, (gear - 1) / (self.vehicle.gearCount - 2)) -- shifts the bias of the power integral higher as the gear number increases
             local nextOverCurrentRatio = self:getGearRatio(gear + 1) / self:getGearRatio(gear)
-            for i = 0, 300, 1 do
-                local upshiftRPM = self:getAbsoluteRPM(i / 300.0)
+            local shiftPointRes = 400
+            local areaRes = 50
+            for i = 0, shiftPointRes, 1 do
+                local upshiftRPM = self:getAbsoluteRPM(i / shiftPointRes)
                 local nextGearRPM = upshiftRPM * nextOverCurrentRatio
                 if nextGearRPM > minRPM then
                     local area = 0
-                    for j = 0, 100, 1 do
-                        local simRPM = math.lerp(nextGearRPM, upshiftRPM, j / 100.0)
-                        area = area + self:getMaxHP(simRPM, gear + 1) / 100.0 * math.lerp(1.0, areaSkew, (j / 100.0))
+                    for j = 0, areaRes, 1 do
+                        local simRPM = math.lerp(nextGearRPM, upshiftRPM, j / areaRes)
+                        area = area + self:getMaxHP(simRPM, gear + 1) / areaRes -- * math.lerp(1.0, areaSkew, (j / areaRes))
                     end
                     if area > bestArea then
                         bestArea = area
@@ -551,7 +596,7 @@ local function peakGripEstImpl(load, curve, fz0, lsExp, dRef)
     local efficiency = 0.71
 
     if curve then
-        curve.useCubicInterpolation = true
+        curve.useCubicInterpolation = false
         curve.extrapolate = true
         local d = curve:get(load * magicNumber1)
 
