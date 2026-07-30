@@ -1,6 +1,6 @@
 # Assetto Corsa: Adam's FFB Toolbox
 
-![Version](https://img.shields.io/badge/Version-1.1.4-blue.svg) ![Compatibility](https://img.shields.io/badge/CSP-0.2.11+-green.svg)
+![Version](https://img.shields.io/badge/Version-1.1.5-blue.svg) ![Compatibility](https://img.shields.io/badge/CSP-0.2.11+-green.svg)
 
 ![Banner](https://i.imgur.com/gPBsANw.jpeg)
 
@@ -44,7 +44,7 @@ From here everything is done from the UI app. Just launch into a session and loo
 
 ## 🎮 Usage
 
-The app will show you a short first-time setup screen, but after that you can start using it. Every setting has tooltips describing what they do, so make sure to read those for explanations.
+The app might show you a short first-time setup screen if necessary, but after that you can start using it. Every setting has a tooltip describing what it does, so make sure to read those for explanations.
 
 ![UI app](https://i.imgur.com/6jgCzFg.png)
 

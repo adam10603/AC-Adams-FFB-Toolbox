@@ -51,7 +51,7 @@ function M:new(vehicle, cPhys)
         end
 
         -- Reading turbo data
-        for i = 0, 3, 1 do
+        for i = 0, 9, 1 do
             local maxBoost   = engineINI:get("TURBO_" .. i, "MAX_BOOST", 0)
             local wasteGate  = engineINI:get("TURBO_" .. i, "WASTEGATE", 0)
             local boostLimit = math.min(maxBoost, wasteGate)
@@ -64,12 +64,12 @@ function M:new(vehicle, cPhys)
 
                     local controllers = {}
 
-                    for j = 0, 3, 1 do
-                        local controllerInput   = ctrl:get("CONTROLLER_" .. j, "INPUT", nil)
-                        local controllerCombine = ctrl:get("CONTROLLER_" .. j, "INPUT", nil)
+                    for j = 0, 9, 1 do
+                        local controllerInput   = ctrl:get("CONTROLLER_" .. j, "INPUT", "")
+                        local controllerCombine = ctrl:get("CONTROLLER_" .. j, "COMBINATOR", "")
                         local controllerLUT     = ctrl:tryGetLut("CONTROLLER_" .. j, "LUT")
 
-                        if controllerInput and controllerCombine and controllerLUT then
+                        if string.len(controllerInput) > 0 and string.len(controllerCombine) > 0 and controllerLUT then
                             controllerLUT.useCubicInterpolation = false
                             controllerLUT.extrapolate = true
                             table.insert(controllers, {
@@ -81,7 +81,8 @@ function M:new(vehicle, cPhys)
                     end
 
                     table.insert(turboData, {
-                        boostLimit   = boostLimit,
+                        maxBoost     = maxBoost,
+                        wasteGate    = wasteGate,
                         referenceRPM = referenceRPM,
                         gamma        = gamma,
                         controllers  = controllers
@@ -247,8 +248,8 @@ function M:new(vehicle, cPhys)
 
     local function findPeakPower()
         if not obj.brokenEngineIni and obj.baseTorqueCurve then
-            for i = 0, 50, 1 do
-                local p = obj:getMaxHP(obj:getAbsoluteRPM(i / 50.0), 1)
+            for i = 0, 100, 1 do
+                local p = obj:getMaxHP(obj:getAbsoluteRPM(i / 100.0), math.round(vehicle.gearCount * 0.7))
                 if p > obj.maxEnginePower then obj.maxEnginePower = p end
             end
             return true
@@ -327,30 +328,35 @@ function M:getMaxTQ(rpm, gear)
 
     local totalBoost = 0.0 -- Total boost from all turbos
 
-    for _, turbo in ipairs(self.turboData) do
+    for turboIndex, turbo in ipairs(self.turboData) do
         local currentTurboBoost = math.clamp(rpm / turbo.referenceRPM, 0.0, 1.0) ^ turbo.gamma -- 0 -- Boost from this turbo
 
+        local maxBoost = turbo.maxBoost
+
         if table.nkeys(turbo.controllers) > 0 then
-            for _, controller in ipairs(turbo.controllers) do
+            maxBoost = 0
+            for controllerIndex, controller in ipairs(turbo.controllers) do
                 local controllerValue = 0 -- Boost from a single controller
 
                 if controller.input == "RPMS" then
                     controller.LUT.useCubicInterpolation = false
                     controllerValue = controller.LUT:get(rpm)
-                elseif turbo.controllerInput == "GEAR" then
+                elseif controller.input == "GEAR" then
                     controller.LUT.useCubicInterpolation = false
                     controllerValue = controller.LUT:get(gear)
                 end
 
                 if controller.combinator == "ADD" then
-                    currentTurboBoost = currentTurboBoost + controllerValue
+                    maxBoost = maxBoost + controllerValue
                 elseif controller.combinator == "MULT" then
-                    currentTurboBoost = currentTurboBoost * controllerValue
+                    maxBoost = maxBoost * controllerValue
                 end
             end
         end
 
-        totalBoost = totalBoost + math.min(currentTurboBoost, turbo.boostLimit)
+        local boostLimit = math.min(maxBoost, turbo.wasteGate)
+
+        totalBoost = totalBoost + math.min(currentTurboBoost, boostLimit)
     end
 
     return baseTorque * (1.0 + totalBoost)
