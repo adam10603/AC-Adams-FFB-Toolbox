@@ -53,7 +53,6 @@ end
 -- ... onto the rest of the script
 
 local updater = require("updater")
--- local json = require("json")
 ---@diagnostic disable-next-line: different-requires
 local lib = require("../../../extension/lua/ffb-postprocess/Adam's FFB Toolbox/AGALib2")
 ---@diagnostic disable-next-line: different-requires
@@ -85,7 +84,11 @@ local defaultAppConfig = {
 
 local appConfig = ac.storage(table.clone(defaultAppConfig, "full"), "AFFBT_APP_")
 
--- appConfig.graphWindowSize = defaultAppConfig.graphWindowSize
+-- if false then
+--     for k, v in pairs(defaultAppConfig) do
+--         appConfig[k] = v
+--     end
+-- end
 
 local cachedOverrideKeys = {} -- avoids string concatenations all the time
 local function getConfigValue(key) -- includes car overrides
@@ -111,7 +114,8 @@ local function readGameConfigFiles()
     gameConfigFiles["ffb_tweaks.ini"] = ac.INIConfig.cspModule(ac.CSPModuleID.FFBTweaks)
 end
 
-local gameConfigSuggestions = {} -- wont necessarily suggest all of these (see table below), but this also serves as the main list of game settings to hook into
+-- wont necessarily suggest all of these (see table below), but this also serves as the main list of game settings to hook into
+local gameConfigSuggestions = {}
 gameConfigSuggestions["controls.ini:STEER:FF_GAIN"] = 0.5
 gameConfigSuggestions["controls.ini:FF_ENHANCEMENT:CURBS"] = 0.4
 gameConfigSuggestions["controls.ini:FF_ENHANCEMENT:ABS"] = 0.0
@@ -122,7 +126,7 @@ gameConfigSuggestions["controls.ini:FF_TWEAKS:CENTER_BOOST_GAIN"] = 0.0
 gameConfigSuggestions["ffb_tweaks.ini:POSTPROCESSING:RANGE_COMPRESSION"] = 1.0
 gameConfigSuggestions["ffb_tweaks.ini:POSTPROCESSING:RANGE_COMPRESSION_ASSIST"] = 0.0
 
--- this determines which values to actually suggest in the app, otherwise the suggestion value is just use as a default / type reference
+-- this determines which values to actually suggest in the app, otherwise the suggestion value is just used as a default / type reference
 local gameConfigSuggestionsConsidered = {}
 gameConfigSuggestionsConsidered["controls.ini:FF_ENHANCEMENT:ABS"] = true
 gameConfigSuggestionsConsidered["controls.ini:FF_ENHANCEMENT:ROAD"] = true
@@ -327,6 +331,7 @@ local tmpVec3 = vec2()
 
 local factoryPresets = {}
 factoryPresets["Author's preference"] = '{"roadTexture":0,"filterFrequency":32,"roadTextureBypassFilter":false,"extraSATMakeupGain":true,"vibrationSharpness":0.5,"oversteerFeel":0.69999998807907,"peakReduction":true,"oversteerFeelAggression":1,"oversteerFeelMakeupGain":false,"lockupFeelWithABS":false,"_version":110,"downforceCompMode":2,"extraSATSuspensionCompensation":true,"downforceCompPercentage":1,"vibrationBaseFrequency":15,"autoGainOffset":0,"downforceCompDynamicRange":1.2999999523163,"extraSAT":1.5,"downforceCompMakeupGain":true,"ffbLevelAfterFinish":0.050000000745058,"brakeFeel":0.69999998807907,"autoAdjustGain":false,"brakeFeelExponent":2,"vibrationSource":0,"brakeFeelWithABS":true,"vibrationLevel":0.18000000715256,"brakeFeelFilter":true,"brakeFeelMakeupGain":false,"absFilterEnabled":true,"lockupFeel":0.80000001192093,"filterEnabled":false}'
+factoryPresets["Default"] = "" -- will be loaded from the storage script
 
 -- Checking if a new version is available
 
@@ -342,6 +347,22 @@ updater.getLatestVersion(function (versionString, releaseNotes, downloadURL)
         -- newVersionURL = downloadURL
     end
 end)
+
+local function loadDefaultGlobalSettings()
+    pcall(function ()
+        for k, v in pairs(storage.defaultSettings) do
+            generalConfig[k] = v
+        end
+    end)
+end
+
+local function loadDefaultCarSpecificSettings()
+    pcall(function ()
+        for k, v in pairs(storage.defaultCarSpecificSettings) do
+            carSpecificConfig[k] = v
+        end
+    end)
+end
 
 local function isPresetNameValid(presetName)
     return presetName:match("^[%w _%-%']+$")
@@ -383,6 +404,12 @@ local function markPresetCacheDirty()
 end
 
 local function loadPreset(presetName)
+
+    if presetName == "Default" then
+        loadDefaultGlobalSettings()
+        return true
+    end
+
     local presetJSON = nil
 
     if factoryPresets[presetName] then
@@ -467,18 +494,6 @@ local function enableScript()
     ac.reloadControlSettings()
 end
 
-local function loadDefaultSettings()
-    pcall(function ()
-        for k, v in pairs(storage.defaultSettings) do
-            generalConfig[k] = v
-        end
-
-        for k, v in pairs(storage.defaultCarSpecificSettings) do
-            carSpecificConfig[k] = v
-        end
-    end)
-end
-
 local function resetCarOverrides()
     pcall(function ()
         for k, v in pairs(storage.defaultCarSpecificSettings) do
@@ -488,7 +503,8 @@ local function resetCarOverrides()
 end
 
 local function factoryReset()
-    loadDefaultSettings()
+    loadDefaultGlobalSettings()
+    loadDefaultCarSpecificSettings()
 
     for k, v in pairs(defaultAppConfig) do
         if vec2.isvec2(v) or vec3.isvec3(v) or rgbm.isrgbm(v) then
@@ -1338,42 +1354,54 @@ function script.windowMain(dt)
     runtimeData.appHeartbeatClock = os.clock()
 
     if not appConfig.firstInstallPassed then
+
         local message = "This seems to be your first time using this plugin.\n\nFor the best experience it's recommended to use certain values for AC's built-in FFB settings.\n\nThe recommended FFB settings are:\n"
+
+        local anySettingDifferent = false
 
         for k, v in pairs(gameConfigSuggestions) do
             if gameConfigSuggestionsConsidered[k] then
-                message = message .. "\n" .. gameConfigNames[k] .. " = " .. v * 100.0 -- // FIXME shouldnt rely on every setting being a percentage
-            end
-        end
-
-        message = message .. "\n\nYou can also change these any time from this app!\n\nClick this button to apply the settings above (others like gain won't be affected):"
-
-        showDummyLine(0.5)
-        ui.textWrapped(message)
-        showDummyLine(0.5)
-
-        if showButton("✅ Apply recommended settings", false, nil, nil, nil, 0) then
-            for k, v in pairs(gameConfigSuggestions) do
-                if gameConfigSuggestionsConsidered[k] then
-                    currentGameConfigValues[k] = v
+                if math.abs(currentGameConfigValues[k] - v) > 1e-6 then
+                    message = message .. "\n" .. gameConfigNames[k] .. " = " .. v * 100.0 -- // FIXME shouldnt rely on every setting being a percentage
+                    anySettingDifferent = true
                 end
             end
-
-            saveGameConfigValues(true)
-
-            appConfig.firstInstallPassed = true
         end
 
-        showDummyLine(0.5)
-        ui.textWrapped("... or you can continue without changing anything:")
-        showDummyLine(0.5)
+        if anySettingDifferent then
 
-        if showButton("👉 Continue with current settings", false, nil, nil, nil, 0) then
+            message = message .. "\n\nYou can also change these any time from this app!\n\nClick this button to apply the settings above (others like gain won't be affected):"
+
+            showDummyLine(0.5)
+            ui.textWrapped(message)
+            showDummyLine(0.5)
+
+            if showButton("✅ Apply recommended settings", false, nil, nil, nil, 0) then
+                for k, v in pairs(gameConfigSuggestions) do
+                    if gameConfigSuggestionsConsidered[k] then
+                        currentGameConfigValues[k] = v
+                    end
+                end
+
+                saveGameConfigValues(true)
+
+                appConfig.firstInstallPassed = true
+            end
+
+            showDummyLine(0.5)
+            ui.textWrapped("... or you can continue without changing anything:")
+            showDummyLine(0.5)
+
+            if showButton("👉 Continue with current settings", false, nil, nil, nil, 0) then
+                appConfig.firstInstallPassed = true
+            end
+
+            popStyle()
+            return
+
+        else
             appConfig.firstInstallPassed = true
         end
-
-        popStyle()
-        return
     end
 
     local reservedYSpace = newVersionAvailable and (ui.textLineHeight() * 4.0) or 0.0
@@ -1435,14 +1463,12 @@ function script.windowMain(dt)
 end
 
 function script.renderGraphWindow(dt)
-    if not runtimeData.appCanRun then
+    if not runtimeData.appCanRun or not appConfig.showGraphWindow then
         return
     end
 
     pushStyle()
-    if appConfig.showGraphWindow then
-        drawCompleteFFBGraphToolWindow()
-    end
+    drawCompleteFFBGraphToolWindow()
     popStyle()
 end
 

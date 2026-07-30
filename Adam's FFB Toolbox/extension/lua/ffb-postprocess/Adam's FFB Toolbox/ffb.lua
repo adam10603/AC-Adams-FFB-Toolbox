@@ -657,6 +657,8 @@ local function processFFB(ffbValue, dt)
 
     ac.debug("Gen | Mz ratio in FFB", mzRatioInFFB, 0.0, 1.0)
 
+    ac.debug("Gen | drivetrain power", vData.vehicle.drivetrainPower)
+
     -- ac.debug("est max front axle mz", mzEstimateAtCurrentSpeed)
     -- ac.debug("est max front axle mz old", vData.perfData:getMzEstimateOld(frontWheelLoadAtCurrentSpeed, vData.vehicle.wheels[1].tyreRadius))
     -- ac.debug("real front axle mz", vData.vehiclePR.wheels[0].mz + vData.vehiclePR.wheels[1].mz)
