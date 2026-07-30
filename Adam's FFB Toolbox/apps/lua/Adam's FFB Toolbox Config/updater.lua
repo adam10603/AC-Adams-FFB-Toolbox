@@ -31,7 +31,7 @@ end
 ---@param callback fun(versionString: string, releaseNotes: string, downloadURL: string)
 M.getLatestVersion = function(callback)
 
-    -- callback("1.5.6", " - Testing\r\n - Patch notes")
+    -- callback("1.5.6", " - Testing\r\n - Patch notes", "link")
 
     web.get(versionRequestURL, versionRequestHeaders, function (err, response)
         if (err ~= nil and err ~= "") or response.status ~= 200 then
