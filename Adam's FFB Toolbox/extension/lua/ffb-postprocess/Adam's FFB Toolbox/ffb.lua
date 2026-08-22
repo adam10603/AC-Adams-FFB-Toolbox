@@ -624,6 +624,7 @@ end
 
 local lastGainChangeAttempt = 0.0
 -- local prevRAxleHVelAngle = 0.0
+-- local lastRpm = 1000.0
 
 local function processFFB(ffbValue, dt)
 
@@ -1108,11 +1109,6 @@ local function processFFB(ffbValue, dt)
 
     -- haptics, after the filter so the vibrations dont get killed by filtering
 
-    local vibrationSource = getConfigValue("vibrationSource")
-    local rpmExtrapolation = 0.075 -- controls how long before the shifting point the vibration kicks in. no particular unit, tune by observation
-    local rawExtrapolatedRPM = vData.vehiclePR.rpm * (1.0 + vData.vehiclePR.gForces.z * rpmExtrapolation)
-    local smoothExtrapolatedRPM = rpmFilter:process(rawExtrapolatedRPM)
-
     local frontNdSlipAngleAbs = mathAbs(vData.frontSlipDeg / frontPeakSlipAngle)
     local rearNdSlipAngleAbs = mathAbs(vData.rearSlipDeg / rearPeakSlipAngle)
     local drivenAxleSlipRatio = (vData.vehicle.tractionType == 1) and vData.frontSlipRatio or vData.rearSlipRatio
@@ -1121,7 +1117,18 @@ local function processFFB(ffbValue, dt)
     local drivenAxleNdSlipRatio = drivenAxleSlipRatio / drivenAxlePeakSlipRatio
     local engagedGear = vData.vehicle.engagedGear
 
-    local canShift = (vData.vehiclePR.gForces.z > 0.005) and (vData.vehiclePR.gas > 0.01) and (mathAbs(rAxleHVelAngleRaw) < 90.0) and (drivenAxleNdSlipRatio > 0.01 and drivenAxleNdSlipRatio < 1.5)
+    local vibrationSource = getConfigValue("vibrationSource")
+    local rpmExtrapolationTime = 0.45 -- how long before the shifting point the vibration kicks in (in seconds)
+    local drivenAxleWheelRadius = (vData.vehicle.tractionType == 1) and vData.vehicle.wheels[0].tyreRadius or vData.vehicle.wheels[2].tyreRadius
+    local rpmChangeRate = vData.vehiclePR.gForces.z * 265 * (vData.cPhys.gearRatio * vData.cPhys.finalRatio) * (0.34 / drivenAxleWheelRadius) -- this is a very close approximation of rpm change rate based on longitudinal g-force, because tracking the actual rpm change rate could be thrown off by tc cuts and such
+    local rawExtrapolatedRPM = vData.vehiclePR.rpm + rpmChangeRate * rpmExtrapolationTime
+    local smoothExtrapolatedRPM = rpmFilter:process(rawExtrapolatedRPM)
+
+    -- local rpmChangeRateReal = (vData.vehiclePR.rpm - lastRpm) / dt
+    -- lastRpm = vData.vehiclePR.rpm
+    -- ac.debug("rpm change rate over est", mathClamp(libNumberGuard(rpmChangeRateReal / rpmChangeRate), -10.0, 10.0), 0.0, 2.0)
+
+    local canShift = (vData.vehiclePR.gas > 0.01) and (mathAbs(rAxleHVelAngleRaw) < 90.0) and (drivenAxleNdSlipRatio < 1.5)
 
     if (engagedGear ~= prevEngagedGear) or (not canShift) then
         shiftWarning = false
