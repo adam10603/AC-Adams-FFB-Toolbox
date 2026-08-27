@@ -1120,13 +1120,14 @@ local function processFFB(ffbValue, dt)
     local vibrationSource = getConfigValue("vibrationSource")
     local rpmExtrapolationTime = 0.45 -- how long before the shifting point the vibration kicks in (in seconds)
     local drivenAxleWheelRadius = (vData.vehicle.tractionType == 1) and vData.vehicle.wheels[0].tyreRadius or vData.vehicle.wheels[2].tyreRadius
-    local rpmChangeRate = vData.vehiclePR.gForces.z * 265 * (vData.cPhys.gearRatio * vData.cPhys.finalRatio) * (0.34 / drivenAxleWheelRadius) -- this is a very close approximation of rpm change rate based on longitudinal g-force, because tracking the actual rpm change rate could be thrown off by tc cuts and such
+    local rpmChangeRate = vData.vehiclePR.gForces.z * 265.0 * vData.perfData:getDrivetrainRatio() * (0.34 / drivenAxleWheelRadius) -- this is a very close approximation of rpm change rate based on longitudinal g-force, because tracking the actual rpm change rate could be thrown off by tc cuts and such
     local rawExtrapolatedRPM = vData.vehiclePR.rpm + rpmChangeRate * rpmExtrapolationTime
     local smoothExtrapolatedRPM = rpmFilter:process(rawExtrapolatedRPM)
 
     -- local rpmChangeRateReal = (vData.vehiclePR.rpm - lastRpm) / dt
     -- lastRpm = vData.vehiclePR.rpm
     -- ac.debug("rpm change rate over est", mathClamp(libNumberGuard(rpmChangeRateReal / rpmChangeRate), -10.0, 10.0), 0.0, 2.0)
+    -- ac.debug("rpmChangeRate", rpmChangeRate, -5000, 5000)
 
     local canShift = (vData.vehiclePR.gas > 0.01) and (mathAbs(rAxleHVelAngleRaw) < 90.0) and (drivenAxleNdSlipRatio < 1.5)
 
