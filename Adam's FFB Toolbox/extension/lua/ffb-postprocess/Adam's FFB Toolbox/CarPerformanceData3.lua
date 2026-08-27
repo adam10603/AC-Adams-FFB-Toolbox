@@ -52,42 +52,45 @@ function M:new(vehicle, cPhys)
 
         -- Reading turbo data
         for i = 0, 9, 1 do
-            local maxBoost   = engineINI:get("TURBO_" .. i, "MAX_BOOST", 0)
-            local wasteGate  = engineINI:get("TURBO_" .. i, "WASTEGATE", 0)
-            local boostLimit = math.min(maxBoost, wasteGate)
-            if boostLimit ~= 0 then
-                local referenceRPM = engineINI:get("TURBO_" .. i, "REFERENCE_RPM", -1)
-                local gamma        = engineINI:get("TURBO_" .. i, "GAMMA", -1)
+            local maxBoost    = engineINI:get("TURBO_" .. i, "MAX_BOOST", 0)
+            local wasteGate   = engineINI:get("TURBO_" .. i, "WASTEGATE", 0)
+            local referenceRPM = engineINI:get("TURBO_" .. i, "REFERENCE_RPM", -1)
+            local gamma        = engineINI:get("TURBO_" .. i, "GAMMA", -1)
 
-                if referenceRPM ~= -1 and gamma ~= -1 then
-                    local ctrl = ac.INIConfig.carData(vehicle.index, "ctrl_turbo" .. i .. ".ini")
+            if referenceRPM ~= -1 and gamma ~= -1 then
+                local ctrl = ac.INIConfig.carData(vehicle.index, "ctrl_turbo" .. i .. ".ini")
+                local hasControllerFile = ctrl and table.nkeys(ctrl.sections) > 0
+                local controllers = {}
 
-                    local controllers = {}
-
+                if hasControllerFile then
                     for j = 0, 9, 1 do
                         local controllerInput   = ctrl:get("CONTROLLER_" .. j, "INPUT", "")
                         local controllerCombine = ctrl:get("CONTROLLER_" .. j, "COMBINATOR", "")
                         local controllerLUT     = ctrl:tryGetLut("CONTROLLER_" .. j, "LUT")
 
                         if string.len(controllerInput) > 0 and string.len(controllerCombine) > 0 and controllerLUT then
-                            controllerLUT.useCubicInterpolation = false
+                            controllerLUT.useCubicInterpolation = true -- this is correct here
                             controllerLUT.extrapolate = true
+
                             table.insert(controllers, {
-                                input      = controllerInput,
-                                combinator = controllerCombine,
+                                input      = string.upper(controllerInput),
+                                combinator = string.upper(controllerCombine),
                                 LUT        = controllerLUT,
+                                upLimit    = ctrl:get("CONTROLLER_" .. j, "UP_LIMIT", math.NaN),
+                                downLimit  = ctrl:get("CONTROLLER_" .. j, "DOWN_LIMIT", math.NaN)
                             })
                         end
                     end
-
-                    table.insert(turboData, {
-                        maxBoost     = maxBoost,
-                        wasteGate    = wasteGate,
-                        referenceRPM = referenceRPM,
-                        gamma        = gamma,
-                        controllers  = controllers
-                    })
                 end
+
+                table.insert(turboData, {
+                    maxBoost        = maxBoost,
+                    wasteGate       = wasteGate,
+                    referenceRPM    = referenceRPM,
+                    gamma           = gamma,
+                    controllers     = controllers,
+                    hasControllers  = hasControllerFile
+                })
             end
         end
     end
@@ -123,7 +126,7 @@ function M:new(vehicle, cPhys)
                 break
             end
 
-            p = p * 1.16 -- rough compensation to match the range that the proper method would return
+            p = p * 1.18 -- rough compensation to match the range that the proper method would return
             local t = p * 5252.0 / r
 
             if r < uiMinRPM then
@@ -326,37 +329,60 @@ function M:getMaxTQ(rpm, gear)
 
     local baseTorque = self.baseTorqueCurve:get(rpm)
 
-    local totalBoost = 0.0 -- Total boost from all turbos
+    if self.uiTorqueCurveAvailable then
+        return baseTorque
+    end
 
-    for turboIndex, turbo in ipairs(self.turboData) do
-        local currentTurboBoost = math.clamp(rpm / turbo.referenceRPM, 0.0, 1.0) ^ turbo.gamma -- 0 -- Boost from this turbo
+    local totalBoost = 0.0
 
-        local maxBoost = turbo.maxBoost
+    for _, turbo in ipairs(self.turboData) do
+        local baseLevel = math.min(1.0, (rpm / turbo.referenceRPM) ^ turbo.gamma)
 
-        if table.nkeys(turbo.controllers) > 0 then
-            maxBoost = 0
-            for controllerIndex, controller in ipairs(turbo.controllers) do
-                local controllerValue = 0 -- Boost from a single controller
+        local boostMult = turbo.maxBoost
+
+        if turbo.hasControllers then
+            boostMult = 0.0
+            for _, controller in ipairs(turbo.controllers) do
+                local controllerValue = 0.0
 
                 if controller.input == "RPMS" then
-                    controller.LUT.useCubicInterpolation = false
                     controllerValue = controller.LUT:get(rpm)
                 elseif controller.input == "GEAR" then
-                    controller.LUT.useCubicInterpolation = false
                     controllerValue = controller.LUT:get(gear)
+                elseif controller.input == "GAS" then
+                    controllerValue = controller.LUT:get(1.0)
+                elseif controller.input == "BRAKE" then
+                    controllerValue = controller.LUT:get(0.0)
+                elseif controller.input == "OVERSTEER_FACTOR" then
+                    controllerValue = controller.LUT:get(0.0)
+                else
+                    -- // TODO later
+                    controllerValue = 0.0
                 end
 
                 if controller.combinator == "ADD" then
-                    maxBoost = maxBoost + controllerValue
+                    boostMult = boostMult + controllerValue
                 elseif controller.combinator == "MULT" then
-                    maxBoost = maxBoost * controllerValue
+                    boostMult = boostMult * controllerValue
+                end
+
+                if not math.isNaN(controller.upLimit) and controller.upLimit < boostMult then
+                    boostMult = controller.upLimit
+                end
+
+                if not math.isNaN(controller.downLimit) and controller.downLimit > boostMult then
+                    boostMult = controller.downLimit
                 end
             end
         end
 
-        local boostLimit = math.min(maxBoost, turbo.wasteGate)
+        boostMult = boostMult * baseLevel
 
-        totalBoost = totalBoost + math.min(currentTurboBoost, boostLimit)
+        if turbo.wasteGate ~= 0 then
+            boostMult = math.min(turbo.wasteGate, boostMult)
+        end
+
+        totalBoost = totalBoost + boostMult
     end
 
     return baseTorque * (1.0 + totalBoost)
