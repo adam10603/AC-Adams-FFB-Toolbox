@@ -4,7 +4,7 @@ local M = {}
 
 M.ffbHistoryBufferCapacity = 1000
 M.ffbSampleRateDiv = 1 -- divisor to the sampling rate of the ffb graph. 1 = 333hz, 2 = 167hz etc. this rate will also be the visual frame rate of the graph
-M.configVersion = 110
+M.configVersion = 118
 
 M.generalConfig = {
     ac.StructItem.key("AFFBT_Data"),
@@ -20,7 +20,7 @@ M.generalConfig = {
     downforceCompMakeupGain = ac.StructItem.boolean(),
     brakeFeel = ac.StructItem.float(),
     brakeFeelWithABS = ac.StructItem.boolean(),
-    brakeFeelFilter = ac.StructItem.boolean(),
+    -- brakeFeelFilter = ac.StructItem.boolean(),
     brakeFeelExponent = ac.StructItem.float(),
     brakeFeelMakeupGain = ac.StructItem.boolean(),
     lockupFeel = ac.StructItem.float(),
@@ -67,8 +67,8 @@ M.carSpecificConfig = {
     brakeFeel = ac.StructItem.float(),
     OVERRIDE_brakeFeelWithABS = ac.StructItem.boolean(),
     brakeFeelWithABS = ac.StructItem.boolean(),
-    OVERRIDE_brakeFeelFilter = ac.StructItem.boolean(),
-    brakeFeelFilter = ac.StructItem.boolean(),
+    -- OVERRIDE_brakeFeelFilter = ac.StructItem.boolean(),
+    -- brakeFeelFilter = ac.StructItem.boolean(),
     OVERRIDE_brakeFeelExponent = ac.StructItem.boolean(),
     brakeFeelExponent = ac.StructItem.float(),
     OVERRIDE_brakeFeelMakeupGain = ac.StructItem.boolean(),
@@ -121,7 +121,7 @@ M.defaultSettings = {
     downforceCompMakeupGain = true,
     brakeFeel = 0.0,
     brakeFeelWithABS = true,
-    brakeFeelFilter = true,
+    -- brakeFeelFilter = true,
     brakeFeelExponent = 1.0,
     brakeFeelMakeupGain = false,
     lockupFeel = 0.0,
@@ -148,6 +148,11 @@ function M.versionMigration(parsedTable)
         parsedTable.roadTexture = M.defaultSettings.roadTexture
         parsedTable.roadTextureBypassFilter = M.defaultSettings.roadTextureBypassFilter
     end
+
+    if parsedTable._version < 118 then
+        parsedTable.brakeFeelFilter = nil
+    end
+
     return true
 end
 

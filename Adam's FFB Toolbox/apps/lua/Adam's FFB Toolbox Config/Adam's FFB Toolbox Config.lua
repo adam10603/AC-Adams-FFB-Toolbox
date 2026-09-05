@@ -227,7 +227,7 @@ local tooltips = {
     downforceCompMakeupGain = "If you reduce downforce in your FFB, this setting will compensate by increasing the overall FFB level accordingly.\n\nThis makes it so the FFB strength at ≈70% of the car's top speed will stay consistent regardless of the downforce settings above.",
     brakeFeel = "Makes the FFB stronger proportional to the braking done by the front wheels.\n\nThis provides additional brake feedback by letting you feel the braking force through your wheel.\n\nCan be especially useful in cars with no ABS.\n\nThe strength of this effect is already relative to the FFB strength of the car, so tweaking the effect per-car usually isn't needed.\n\nIt is recommended to also use the lockup feel setting together with this one.",
     brakeFeelWithABS = "Disables the brake feel effect when ABS is present.", -- inverted on ui
-    brakeFeelFilter = "Applies a small amount of filtering only to the additional force from the brake feel effect.\n\nNormally the brake feel effect can amplify the feeling of bumps, curbs and other vibrations while braking, which this setting helps to reduce.",
+    -- brakeFeelFilter = "Applies a small amount of filtering only to the additional force from the brake feel effect.\n\nNormally the brake feel effect can amplify the feeling of bumps, curbs and other vibrations while braking, which this setting helps to reduce.",
     brakeFeelExponent = "Changes the response curve of the brake feel setting.\n\nUnder 1.0 = the brake feel comes in sooner, but changes less near the maximum.\n\n1.0 = linear response.\n\nOver 1.0 = the brake feel comes in slower at first, but changes faster near the maximum. This can give a more obvious feel in the zone where lockups can happen.",
     brakeFeelMakeupGain = "If you add extra brake feel force, this setting will compensate by decreasing the overall FFB level accordingly.",
     lockupFeel = "Reduces FFB strength when the front wheels lock up.\n\nThis also happens naturally, but this setting will exaggerate the effect.\n\nThis effect is especially recommended if you're also using the brake feel setting, since that setting alone only communicates lockups to a limited extent.",
@@ -743,9 +743,9 @@ local function drawGeneralForceSection(perCarTab)
     overridableItemWrapper(perCarTab, "brakeFeelWithABS", function (textColor)
         showCheckbox(configTable, "brakeFeelWithABS", "Disable if ABS is available", true, false, textColor)
     end)
-    overridableItemWrapper(perCarTab, "brakeFeelFilter", function (textColor)
-        showCheckbox(configTable, "brakeFeelFilter", "Filter brake forces", false, false, textColor)
-    end)
+    -- overridableItemWrapper(perCarTab, "brakeFeelFilter", function (textColor)
+    --     showCheckbox(configTable, "brakeFeelFilter", "Filter brake forces", false, false, textColor)
+    -- end)
     overridableItemWrapper(perCarTab, "brakeFeelMakeupGain", function (textColor)
         showCheckbox(configTable, "brakeFeelMakeupGain", "Compensate FFB strength", false, false, textColor)
     end)
