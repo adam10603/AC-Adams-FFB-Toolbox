@@ -347,6 +347,30 @@ end
 
 -- ============================ helpers
 
+---@param vehicle ac.StateCar
+local function getReferenceWheelIndicies(vehicle)
+    return (vehicle.tractionType == 1) and { 0, 1 } or { 2, 3 }
+end
+
+---@param vehicle ac.StateCar
+local function getWheels(indicies, vehicle)
+    return { vehicle.wheels[indicies[1]], vehicle.wheels[indicies[2]] }
+end
+
+---@param vehicle ac.StateCar
+local function getPredictedSpeedForRPM(rpm, vehicle, drivetrainRatio)
+    local referenceWheels = getWheels(getReferenceWheelIndicies(vehicle), vehicle)
+    local wheelDiameter = (referenceWheels[1].tyreRadius + referenceWheels[2].tyreRadius)
+    return (rpm * math.pi * wheelDiameter) / (60.0 * drivetrainRatio)
+end
+
+---@param vehicle ac.StateCar
+local function getPredictedRPMForSpeed(speedKph, vehicle, drivetrainRatio)
+    local referenceWheels = getWheels(getReferenceWheelIndicies(vehicle), vehicle)
+    local wheelDiameter = (referenceWheels[1].tyreRadius + referenceWheels[2].tyreRadius)
+    return speedKph * (60.0 * drivetrainRatio) / (math.pi * wheelDiameter)
+end
+
 local function weightedAverageWheelValue(values, wheelLoads, loadExponent)
     local result = 0.0
     local totalWeight = 0.0
@@ -416,10 +440,12 @@ local function getLowPassLimits(cornerFrequency)
 end
 
 local physicsUpdateRate = 1000.0 / 3.0
+local rpmFilterLagCompensation = 1.055 -- the rpm will be extrapolated this much more to compensate for the overall lag that the filter adds
 
 local filter = biquadFilter.new("LowPass", biquadFilter.calculateLowPassParameters(physicsUpdateRate, getLowPassLimits(32.0)))
-local brakeFeelFilter = biquadFilter.new("LowPass", biquadFilter.calculateLowPassParameters(physicsUpdateRate, getLowPassLimits(18.0)))
-local rpmFilter = biquadFilter.new("LowPass", biquadFilter.calculateLowPassParameters(physicsUpdateRate, getLowPassLimits(24.0)))
+local brakeFeelFilter = biquadFilter.new("LowPass", biquadFilter.calculateLowPassParameters(physicsUpdateRate, getLowPassLimits(12.0))) -- 10?
+local prevExtraSAT = 0.0
+local rpmFilter = biquadFilter.new("LowPass", biquadFilter.calculateLowPassParameters(physicsUpdateRate, getLowPassLimits(5.0)))
 local tSinceLastFrontABSPulse = 3600.0
 local ffbABSFiltered = 0.0
 local ffbPeakProtected = 0.0
@@ -601,6 +627,7 @@ end
 local function onProcessingSkip(ffbValue, vehicle) -- clears any leftover state from all the effects when the overall processing is disabled
     ffbABSFiltered = ffbValue
     brakeFeelFilter:reset(0.0)
+    prevExtraSAT = 0.0
     ffbPeakProtected = ffbValue
     filter:reset(ffbValue)
     shiftWarning = false
@@ -749,7 +776,7 @@ local function processFFB(ffbValue, dt)
     local absFilterBlend = 1.0
 
     if getConfigValue("absFilterEnabled") then
-        local maxFilterRT = 0.0175 --0.0175
+        local maxFilterRT = 0.018
         local filterHoldTime = 0.1
         local filterFadeTime = 0.1
         local absFilterMult = mathSmoothstep(mathLerpInvSat(tSinceLastFrontABSPulse - filterHoldTime, filterFadeTime, 0.0))
@@ -794,15 +821,11 @@ local function processFFB(ffbValue, dt)
     end
 
     if extraSAT > 1e-6 then
-        -- tmpVec1:set(vData.perfData.steerBasisAxis):mul(xMirrorVec)
-        -- tmpVec2:set(vData.perfData.steerBasisAxis)
-        -- local frontSATFFB = (
-        --     vData.vehiclePR.wheels[0].mz * tmpVec1:dot(vData.vehiclePR.wheels[0].contactNormal) +
-        --     vData.vehiclePR.wheels[1].mz * tmpVec2:dot(vData.vehiclePR.wheels[1].contactNormal)
-        -- )
         local steeringRackExtraTorque = vData.perfData:getSteeringRackTorqueFromFrontMz(vData.vehiclePR.wheels[0].mz, vData.vehiclePR.wheels[1].mz, vData.vehiclePR.wheels[0].contactNormal, vData.vehiclePR.wheels[1].contactNormal)
         local extraSATMult = extraSAT * lowSpeedFade
         local addedSAT = steeringRackExtraTorque / 600.0 * vData.vehicle.ffbBase * ac.getFFBGain() * extraSATMult
+        addedSAT = mathLerp(prevExtraSAT, addedSAT, absFilterBlend) -- if the abs filter is active we also filter the extra sat to avoid adding back abs noise
+        prevExtraSAT = addedSAT
         finalFFB = finalFFB + addedSAT
 
         if getConfigValue("extraSATMakeupGain") then
@@ -812,6 +835,8 @@ local function processFFB(ffbValue, dt)
 
         -- ac.debug("Estimate with SAT", ac.getFFBGain() * vData.perfData:getFFBPeakStrengthEstimate(frontWheelLoadAt70PercentSpeed, vData.vehicle.wheels[1].tyreRadius, vData.vehicle.ffbBase, mzEstimate * extraSAT))
         -- ac.debug("W1 CP est", vData.perfData:getFrontContactPatchLengthEstimate(vData.vehicle.wheels[1].load, vData.vehicle.wheels[1].tyreRadius))
+    else
+        prevExtraSAT = 0.0
     end
 
     -- downforce compensation
@@ -871,11 +896,12 @@ local function processFFB(ffbValue, dt)
     local brakeFeelAllowed = (vData.vehicle.absMode == 0) or brakeFeelWithABS
     if brakeFeelAllowed and brakeFeel > 1e-6 then
         local frontLongitudinalForce = (vData.vehiclePR.wheels[0].fx + vData.vehiclePR.wheels[1].fx) * 0.5
-        if getConfigValue("brakeFeelFilter") then
-            frontLongitudinalForce = brakeFeelFilter:process(frontLongitudinalForce)
-        else
-            brakeFeelFilter:reset(frontLongitudinalForce)
-        end
+        -- if getConfigValue("brakeFeelFilter") then
+        --     frontLongitudinalForce = brakeFeelFilter:process(frontLongitudinalForce)
+        -- else
+        --     brakeFeelFilter:reset(frontLongitudinalForce)
+        -- end
+        frontLongitudinalForce = brakeFeelFilter:process(frontLongitudinalForce) -- filter is always on now
 
         local refForce = vData.perfData:getFrontPeakLongitudinalForceEst(frontWheelLoadAtRest * 1.4) -- the multiplier accounts for weight shifting to the front under braking. downforce is not included in this on purpose so the added force will scale with it
         local frontLongitudinalForceNd = frontLongitudinalForce / refForce
@@ -1116,12 +1142,23 @@ local function processFFB(ffbValue, dt)
     local drivenAxleNdSlipAngleAbs = (vData.vehicle.tractionType == 1) and frontNdSlipAngleAbs or rearNdSlipAngleAbs
     local drivenAxleNdSlipRatio = drivenAxleSlipRatio / drivenAxlePeakSlipRatio
     local engagedGear = vData.vehicle.engagedGear
+    local drivetrainRatio = vData.perfData:getDrivetrainRatio()
+
+    local rpmUsed = vData.vehiclePR.rpm
+
+    local usePredictedRPM = (drivenAxleNdSlipRatio > 1.5) or ((vData.vehicle.tractionType == 1) and (vData.vehiclePR.wheels[0].load <= 0.0 or vData.vehiclePR.wheels[1].load <= 0.0) or (vData.vehiclePR.wheels[2].load <= 0.0 or vData.vehiclePR.wheels[3].load <= 0.0))
+
+    if usePredictedRPM then
+        local firstGearSlipRatio = 0.1 -- source: my ass (its an estimate)
+        local gearCorrection = 1.0 + (firstGearSlipRatio / vData.cPhys.gearRatios[2] * vData.cPhys.gearRatios[vData.vehicle.gear + 1])
+        rpmUsed = getPredictedRPMForSpeed(vData.vehiclePR.localVelocity.z, vData.vehicle, drivetrainRatio) * gearCorrection * 0.96 -- this is only predicted from speed, not 100% accurate, but its used as a stand-in for when the car is getting wheelspin or when a driven wheel is airborne
+    end
 
     local vibrationSource = getConfigValue("vibrationSource")
-    local rpmExtrapolationTime = 0.45 -- how long before the shifting point the vibration kicks in (in seconds)
+    local rpmExtrapolationTime = 0.42 -- how long before the shifting point the vibration kicks in (in seconds)
     local drivenAxleWheelRadius = (vData.vehicle.tractionType == 1) and vData.vehicle.wheels[0].tyreRadius or vData.vehicle.wheels[2].tyreRadius
-    local rpmChangeRate = vData.vehiclePR.gForces.z * 265.0 * vData.perfData:getDrivetrainRatio() * (0.34 / drivenAxleWheelRadius) -- this is a very close approximation of rpm change rate based on longitudinal g-force, because tracking the actual rpm change rate could be thrown off by tc cuts and such
-    local rawExtrapolatedRPM = vData.vehiclePR.rpm + rpmChangeRate * rpmExtrapolationTime
+    local rpmChangeRate = vData.vehiclePR.gForces.z * 265.0 * drivetrainRatio * (0.34 / drivenAxleWheelRadius) -- this is a very close approximation of rpm change rate based on longitudinal g-force, because tracking the actual rpm change rate could be thrown off by tc cuts and such
+    local rawExtrapolatedRPM = rpmUsed + rpmChangeRate * rpmFilterLagCompensation * rpmExtrapolationTime
     local smoothExtrapolatedRPM = rpmFilter:process(rawExtrapolatedRPM)
 
     -- local rpmChangeRateReal = (vData.vehiclePR.rpm - lastRpm) / dt

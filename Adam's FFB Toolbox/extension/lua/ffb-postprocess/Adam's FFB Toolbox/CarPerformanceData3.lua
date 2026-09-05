@@ -818,43 +818,46 @@ function M:updateDownforceTelemetry(vehiclePR, wheelbase, rearAxleZ, cPhys, dt)
     self.fAxleDownforce = 0.0
     local fAxleDownforceAtVMax = 0.0
     local topSpeedEst = self:getTopSpeedEstimate()
-    local zeroVec = vec3.new(0.0, 0.0, 0.0)
+    local impossibleVec = vec3.new(9999.0, 8888.0, 7777.0)
 
     -- at high speed we take a snapshot of the actual wing lift values rather than the ones predicted at a standstill. this (more or less) accounts for dynamic wing controllers that change things.
     -- EDIT: ignored for now
     local phase2ConditionsMet = (vehiclePR.localVelocity.z > topSpeedEst * 0.5) and (vehiclePR.gas > 0.5) and (math.abs(vehiclePR.steer * self.vehicle.steerLock) < 20.0) and (not self.vehicle.drsActive)
 
-    local wingsChanged = false -- why is there no api to detect setup changes ????
+    local wingsChanged = false -- why is there no api to detect setup changes ???? -- edit: there is, but only available to ui apps. not to scripts dealing with inputs or physics. make it make sense
 
     if #cPhys.wings > 0 then
         for i = 0, #cPhys.wings - 1, 1 do
-            local wingPosition = self.aeroIni:get("WING_" .. i, "POSITION", zeroVec)
-            local wingCl = 0.0
+            local wingPosition = self.aeroIni:get("WING_" .. i, "POSITION", impossibleVec)
 
-            -- if math.abs(vehiclePR.localVelocity.z) < 1.0 then
-            --     if self.lastWingAngles[i] == nil or (math.abs(cPhys.wings[i].angle - self.lastWingAngles[i]) >= 0.51) then
-            --         wingsChanged = true
-            --     end
-            --     self.lastWingAngles[i] = cPhys.wings[i].angle
-            -- end
+            if wingPosition ~= impossibleVec then -- otherwise we are probably dealing with a fin, which should be skipped
 
-            if self.lastWingAngles[i] == nil or (vehiclePR.localVelocity:length() < 1.0 and vehiclePR.gas < 1e-6 and vehiclePR.brake < 1e-6 and math.abs(cPhys.wings[i].angle - self.lastWingAngles[i]) >= 0.49) then -- this jank is here because csp cannot fire events correctly, very fun. also, brakes are technically 100% on the setup screen but this api only refelcts user input it seems so its fine
-                wingsChanged = true
-                -- ac.log("Wing " .. i .. " changed from " .. (self.lastWingAngles[i] or 0) .. " to " .. cPhys.wings[i].angle)
-                self.lastWingAngles[i] = cPhys.wings[i].angle
+                -- if math.abs(vehiclePR.localVelocity.z) < 1.0 then
+                --     if self.lastWingAngles[i] == nil or (math.abs(cPhys.wings[i].angle - self.lastWingAngles[i]) >= 0.51) then
+                --         wingsChanged = true
+                --     end
+                --     self.lastWingAngles[i] = cPhys.wings[i].angle
+                -- end
+
+                if self.lastWingAngles[i] == nil or (vehiclePR.localVelocity:length() < 1.0 and vehiclePR.gas < 1e-6 and vehiclePR.brake < 1e-6 and math.abs(cPhys.wings[i].angle - self.lastWingAngles[i]) >= 0.49) then -- this jank is here because csp cannot fire events correctly, very fun. also, brakes are technically 100% on the setup screen but this api only refelcts user input it seems so its fine
+                    wingsChanged = true
+                    -- ac.log("Wing " .. i .. " changed from " .. (self.lastWingAngles[i] or 0) .. " to " .. cPhys.wings[i].angle)
+                    self.lastWingAngles[i] = cPhys.wings[i].angle
+                end
+
+                local wingArea   = self.aeroIni:get("WING_" .. i, "CHORD", 1.0) * self.aeroIni:get("WING_" .. i, "SPAN", 1.0)
+                local wingCl     = ac.DataLUT11.carData(car.index, self.aeroIni:get("WING_" .. i, "LUT_AOA_CL", ""))
+                local wingClGain = self.aeroIni:get("WING_" .. i, "CL_GAIN", 1.0)
+                local staticCl   = wingCl:get(cPhys.wings[i].angle) * wingClGain * wingArea
+                local currentCl  = cPhys.wings[i].cl
+                local vMaxClUsed = phase2ConditionsMet and currentCl or staticCl
+
+                self.fAxleDownforce = self.fAxleDownforce + (velSquared * staticCl * (wingPosition.z - rearAxleZ) / wheelbase) * 0.5 -- *0.5 should not be needed here but it somehow works so i wont question it
+
+                local wingDownforceAtVMax = vMaxClUsed * topSpeedEst * topSpeedEst * 0.5
+                fAxleDownforceAtVMax = fAxleDownforceAtVMax + wingDownforceAtVMax * (wingPosition.z - rearAxleZ) / wheelbase
+
             end
-
-            local wingArea   = self.aeroIni:get("WING_" .. i, "CHORD", 1.0) * self.aeroIni:get("WING_" .. i, "SPAN", 1.0)
-            local wingCl     = ac.DataLUT11.carData(car.index, self.aeroIni:get("WING_" .. i, "LUT_AOA_CL", ""))
-            local wingClGain = self.aeroIni:get("WING_" .. i, "CL_GAIN", 1.0)
-            local staticCl   = wingCl:get(cPhys.wings[i].angle) * wingClGain * wingArea
-            local currentCl  = cPhys.wings[i].cl
-            local vMaxClUsed = phase2ConditionsMet and currentCl or staticCl
-
-            self.fAxleDownforce = self.fAxleDownforce + (velSquared * staticCl * (wingPosition.z - rearAxleZ) / wheelbase) * 0.5 -- *0.5 should not be needed here but it somehow works so i wont question it
-
-            local wingDownforceAtVMax = vMaxClUsed * topSpeedEst * topSpeedEst * 0.5
-            fAxleDownforceAtVMax = fAxleDownforceAtVMax + wingDownforceAtVMax * (wingPosition.z - rearAxleZ) / wheelbase
         end
     end
 
