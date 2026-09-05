@@ -240,7 +240,7 @@ function M:new(vehicle, cPhys)
         frontSuspensionType     = "DWB",
         steerAssist             = steerAssist,
         hasSteerAssistSetup     = hasSteerAssistSetup,
-        dfDynamicRangeSmoother  = lib.SmoothTowards:new(0.05, 0.1, 0.0, 10.0, 0.0),
+        dfDynamicRangeSmoother  = lib.SmoothTowards:new(0.05, 0.05, 0.0, 2.5, 0.0),
         dfDynamicRange1         = 0.0,
         dfDynamicRange2         = 0.0,
         fAxleDownforce          = 0.0,
