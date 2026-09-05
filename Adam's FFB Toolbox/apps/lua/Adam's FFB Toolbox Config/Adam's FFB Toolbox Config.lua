@@ -104,7 +104,7 @@ local function getConfigValue(key) -- includes car overrides
     return generalConfig[key]
 end
 
-local gameConfigIOMinTime = 0.5
+local gameConfigIOMinTime = 1.0
 
 local gameConfigFiles = {}
 
@@ -471,7 +471,7 @@ local function enableScript()
     gameConfigFiles["ffb_tweaks.ini"]:set("BASIC", "ENABLED", 1)
     gameConfigFiles["ffb_tweaks.ini"]:save()
 
-    enableClicked = os.clock()
+    enableClicked = ui.time()
 
     -- csp cannot keep its ini formats consistent with itself so i have to do this jank shit here, very fun once again
 
@@ -646,7 +646,9 @@ local function overridableItemWrapper(perCarTab, cfgKey, drawItemCallback)
             ui.setNextTextBold()
         else
             textColor = gray
-            carSpecificConfig[cfgKey] = generalConfig[cfgKey] -- the actual ffb script doesnt depend on these being set to the global values if theres no override, this is just so the values on the ui make sense
+            if carSpecificConfig[cfgKey] ~= generalConfig[cfgKey] then
+                carSpecificConfig[cfgKey] = generalConfig[cfgKey] -- the actual ffb script doesnt depend on these being set to the global values if theres no override, this is just so the values on the ui make sense
+            end
         end
     end
     drawItemCallback(textColor)
@@ -1333,8 +1335,7 @@ function script.windowMain(dt)
         else
             showDummyLine()
             ui.textWrapped("The FFB post-processing script is not enabled.")
-            local currentClock = os.clock()
-            if (currentClock - enableClicked) >= 3.0 then
+            if (ui.time() - enableClicked) >= 3.0 then
                 showDummyLine()
                 showButton("Enable", false, nil, enableScript)
             end
