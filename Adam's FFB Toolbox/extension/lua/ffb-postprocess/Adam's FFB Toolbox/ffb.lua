@@ -443,7 +443,8 @@ local physicsUpdateRate = 1000.0 / 3.0
 local rpmFilterLagCompensation = 1.055 -- the rpm will be extrapolated this much more to compensate for the overall lag that the filter adds
 
 local filter = biquadFilter.new("LowPass", biquadFilter.calculateLowPassParameters(physicsUpdateRate, getLowPassLimits(32.0)))
-local brakeFeelFilter = biquadFilter.new("LowPass", biquadFilter.calculateLowPassParameters(physicsUpdateRate, getLowPassLimits(18.0)))
+local brakeFeelFilter = biquadFilter.new("LowPass", biquadFilter.calculateLowPassParameters(physicsUpdateRate, getLowPassLimits(12.0))) -- 10?
+local prevExtraSAT = 0.0
 local rpmFilter = biquadFilter.new("LowPass", biquadFilter.calculateLowPassParameters(physicsUpdateRate, getLowPassLimits(5.0)))
 local tSinceLastFrontABSPulse = 3600.0
 local ffbABSFiltered = 0.0
@@ -626,6 +627,7 @@ end
 local function onProcessingSkip(ffbValue, vehicle) -- clears any leftover state from all the effects when the overall processing is disabled
     ffbABSFiltered = ffbValue
     brakeFeelFilter:reset(0.0)
+    prevExtraSAT = 0.0
     ffbPeakProtected = ffbValue
     filter:reset(ffbValue)
     shiftWarning = false
@@ -774,7 +776,7 @@ local function processFFB(ffbValue, dt)
     local absFilterBlend = 1.0
 
     if getConfigValue("absFilterEnabled") then
-        local maxFilterRT = 0.0175 --0.0175
+        local maxFilterRT = 0.018
         local filterHoldTime = 0.1
         local filterFadeTime = 0.1
         local absFilterMult = mathSmoothstep(mathLerpInvSat(tSinceLastFrontABSPulse - filterHoldTime, filterFadeTime, 0.0))
@@ -819,15 +821,11 @@ local function processFFB(ffbValue, dt)
     end
 
     if extraSAT > 1e-6 then
-        -- tmpVec1:set(vData.perfData.steerBasisAxis):mul(xMirrorVec)
-        -- tmpVec2:set(vData.perfData.steerBasisAxis)
-        -- local frontSATFFB = (
-        --     vData.vehiclePR.wheels[0].mz * tmpVec1:dot(vData.vehiclePR.wheels[0].contactNormal) +
-        --     vData.vehiclePR.wheels[1].mz * tmpVec2:dot(vData.vehiclePR.wheels[1].contactNormal)
-        -- )
         local steeringRackExtraTorque = vData.perfData:getSteeringRackTorqueFromFrontMz(vData.vehiclePR.wheels[0].mz, vData.vehiclePR.wheels[1].mz, vData.vehiclePR.wheels[0].contactNormal, vData.vehiclePR.wheels[1].contactNormal)
         local extraSATMult = extraSAT * lowSpeedFade
         local addedSAT = steeringRackExtraTorque / 600.0 * vData.vehicle.ffbBase * ac.getFFBGain() * extraSATMult
+        addedSAT = mathLerp(prevExtraSAT, addedSAT, absFilterBlend) -- if the abs filter is active we also filter the extra sat to avoid adding back abs noise
+        prevExtraSAT = addedSAT
         finalFFB = finalFFB + addedSAT
 
         if getConfigValue("extraSATMakeupGain") then
@@ -837,6 +835,8 @@ local function processFFB(ffbValue, dt)
 
         -- ac.debug("Estimate with SAT", ac.getFFBGain() * vData.perfData:getFFBPeakStrengthEstimate(frontWheelLoadAt70PercentSpeed, vData.vehicle.wheels[1].tyreRadius, vData.vehicle.ffbBase, mzEstimate * extraSAT))
         -- ac.debug("W1 CP est", vData.perfData:getFrontContactPatchLengthEstimate(vData.vehicle.wheels[1].load, vData.vehicle.wheels[1].tyreRadius))
+    else
+        prevExtraSAT = 0.0
     end
 
     -- downforce compensation
@@ -896,11 +896,12 @@ local function processFFB(ffbValue, dt)
     local brakeFeelAllowed = (vData.vehicle.absMode == 0) or brakeFeelWithABS
     if brakeFeelAllowed and brakeFeel > 1e-6 then
         local frontLongitudinalForce = (vData.vehiclePR.wheels[0].fx + vData.vehiclePR.wheels[1].fx) * 0.5
-        if getConfigValue("brakeFeelFilter") then
-            frontLongitudinalForce = brakeFeelFilter:process(frontLongitudinalForce)
-        else
-            brakeFeelFilter:reset(frontLongitudinalForce)
-        end
+        -- if getConfigValue("brakeFeelFilter") then
+        --     frontLongitudinalForce = brakeFeelFilter:process(frontLongitudinalForce)
+        -- else
+        --     brakeFeelFilter:reset(frontLongitudinalForce)
+        -- end
+        frontLongitudinalForce = brakeFeelFilter:process(frontLongitudinalForce) -- filter is always on now
 
         local refForce = vData.perfData:getFrontPeakLongitudinalForceEst(frontWheelLoadAtRest * 1.4) -- the multiplier accounts for weight shifting to the front under braking. downforce is not included in this on purpose so the added force will scale with it
         local frontLongitudinalForceNd = frontLongitudinalForce / refForce
