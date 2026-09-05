@@ -378,7 +378,7 @@ function M.SmoothTowards:get(val, dt)
     local diffAbs = math.abs(diff)
     local normalizedDiff = diffAbs / self.range
     local outputNormalizedDiff = 0.0
-    local exponentialRate = self.rate * 2.0 -- adjust to taste
+    local exponentialRate = self.rate * self.range * 2.0 -- adjust to taste
 
     if self.linearity >= 1.0 then
         outputNormalizedDiff = math.max(0.0, normalizedDiff - dt * self.rate)
