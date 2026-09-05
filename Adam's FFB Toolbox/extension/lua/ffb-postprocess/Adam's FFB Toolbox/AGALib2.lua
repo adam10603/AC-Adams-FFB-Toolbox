@@ -213,9 +213,9 @@ end
 
 -- RunningAverage class
 M.RunningAverage = {}
+M.RunningAverage.__index = M.RunningAverage
 
 function M.RunningAverage:new(length)
-    self.__index = self
     return setmetatable({
         length   = length or 3,
         elements = {},
@@ -250,9 +250,9 @@ end
 
 -- ValueLimits class
 M.ValueLimitsBuffer = {}
+M.ValueLimitsBuffer.__index = M.ValueLimitsBuffer
 
 function M.ValueLimitsBuffer:new(length)
-    self.__index = self
     return setmetatable({
         length   = length or 2,
         elements = {},
@@ -299,9 +299,9 @@ end
 
 -- PID controller class with a clamped output and anti-windup
 M.PIDController = {}
+M.PIDController.__index = M.PIDController
 
 function M.PIDController:new(Kp, Ki, Kd, inverted, minOutput, maxOutput)
-    self.__index = self
     return setmetatable({
         Kp = Kp or 0,
         Ki = Ki or 0,
@@ -353,63 +353,12 @@ function M.PIDController:reset()
     self.prevError = 0
 end
 
-
--- SmoothTowards class (old shit version)
--- M.SmoothTowardsOld = {}
-
--- -- `speed` is automatically normalized to the range given by `minValue` and `maxValue`.
--- -- Linearity: https://i.imgur.com/rXnDJuh.png
--- function M.SmoothTowardsOld:new(rate, linearity, minValue, maxValue, startingValue)
---     startingValue = startingValue or 0
---     self.__index = self
---     return setmetatable({
---         rate          = rate,
---         linearity     = linearity,
---         range         = maxValue - minValue,
---         state         = startingValue,
---         startingValue = startingValue
---     }, self)
--- end
-
--- function M.SmoothTowardsOld:get(val, dt)
---     local linearitySq       = self.linearity * self.linearity
---     local rate              = self.rate / (1.0 - (1.0 / (linearitySq + (1.0 / 0.75)))) * 0.5
---     local diffAbsNormalized = math.abs((val - self.state) / self.range)
---     local diffSign          = math.sign(val - self.state)
---     local adjustedRate      = (diffAbsNormalized * (1 - linearitySq) + linearitySq) * rate
---     self.state              = self.state + diffSign * math.min(diffAbsNormalized, dt * adjustedRate) * self.range
-
---     return self.state
--- end
-
--- function M.SmoothTowardsOld:getWithRate(val, dt, rate)
---     local originalRate = self.rate
---     self.rate          = rate
---     local ret          = self:get(val, dt)
---     self.rate          = originalRate
-
---     return ret
--- end
-
--- function M.SmoothTowardsOld:getWithRateMult(val, dt, rateMult)
---     return self:getWithRate(val, dt, self.rate * rateMult)
--- end
-
--- function M.SmoothTowardsOld:value()
---     return self.state
--- end
-
--- function M.SmoothTowardsOld:reset()
---     self.state = self.startingValue
--- end
-
-
--- SmoothTowards class (newer less shit version)
+-- SmoothTowards class (finally proper version)
 M.SmoothTowards = {}
+M.SmoothTowards.__index = M.SmoothTowards
 
 function M.SmoothTowards:new(rate, linearity, minValue, maxValue, startingValue)
     startingValue = startingValue or 0
-    self.__index = self
     return setmetatable({
         rate          = rate,
         linearity     = linearity,
@@ -420,14 +369,37 @@ function M.SmoothTowards:new(rate, linearity, minValue, maxValue, startingValue)
 end
 
 function M.SmoothTowards:get(val, dt)
-    local x1             = self.linearity - 0.5
-    local rateCorrection = x1 * x1 * 0.2 + 0.95
-    local normalizedRate = self.rate * self.range * rateCorrection
-    local maxChange      = normalizedRate * dt
-    local factor         = 1.0 - math.exp(-2.0 * maxChange / math.max(self.range, 1e-13))
-    local v0             = self.state + (val - self.state) * factor
-    local v1             = (math.abs(val - self.state) <= maxChange) and val or (self.state + math.sign(val - self.state) * maxChange)
-    self.state           = v0 + (v1 - v0) * self.linearity
+    if self.state == val then
+        return self.state
+    end
+
+    local diff = val - self.state
+    local diffSign = (diff >= 0.0) and 1 or -1
+    local diffAbs = math.abs(diff)
+    local normalizedDiff = diffAbs / self.range
+    local outputNormalizedDiff = 0.0
+    local exponentialRate = self.rate * 2.0 -- adjust to taste
+
+    if self.linearity >= 1.0 then
+        outputNormalizedDiff = math.max(0.0, normalizedDiff - dt * self.rate)
+    elseif self.linearity <= 0.0 then
+        outputNormalizedDiff = normalizedDiff * math.exp(-dt * exponentialRate)
+    else
+        local a = (1.0 - self.linearity) * exponentialRate
+        local b = self.linearity * self.rate
+        local offset = b / a
+
+        outputNormalizedDiff = (normalizedDiff + offset) * math.exp(-a * dt) - offset
+        outputNormalizedDiff = math.max(0.0, outputNormalizedDiff)
+    end
+
+    local outputDiff = outputNormalizedDiff * self.range
+
+    if outputDiff <= 0.0 then
+        self.state = val
+    else
+        self.state = val - diffSign * outputDiff
+    end
 
     return self.state
 end
@@ -455,10 +427,10 @@ end
 
 -- Ring buffer
 M.ValueHistory = {}
+M.ValueHistory.__index = M.ValueHistory
 
 function M.ValueHistory:new(bufferCapacity)
     bufferCapacity = math.max(2, bufferCapacity or 2)
-    self.__index = self
     return setmetatable({
         capacity = bufferCapacity,
         buffer = {},
@@ -558,9 +530,9 @@ end
 
 -- Issues callbacks on key press and repeat events based on key down state
 M.KeyPressHandler = {}
+M.KeyPressHandler.__index = M.KeyPressHandler
 
 function M.KeyPressHandler:new(callback, repeatDelay, repeatInterval)
-    self.__index = self
     return setmetatable({
         callback = callback,
         repeatDelay = repeatDelay,
